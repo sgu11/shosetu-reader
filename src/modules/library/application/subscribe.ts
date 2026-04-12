@@ -1,12 +1,10 @@
 import { eq, and } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { subscriptions, novels } from "@/lib/db/schema";
-import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
 
 export async function subscribeToNovel(
   novelId: string,
 ): Promise<{ subscriptionId: string; isNew: boolean }> {
-  const userId = await resolveUserId();
   const db = getDb();
 
   // Verify novel exists
@@ -20,16 +18,11 @@ export async function subscribeToNovel(
     throw new Error("Novel not found");
   }
 
-  // Check for existing subscription
+  // Check for existing subscription (universal — not per-user)
   const [existing] = await db
     .select()
     .from(subscriptions)
-    .where(
-      and(
-        eq(subscriptions.userId, userId),
-        eq(subscriptions.novelId, novelId),
-      ),
-    )
+    .where(eq(subscriptions.novelId, novelId))
     .limit(1);
 
   if (existing) {
@@ -45,14 +38,13 @@ export async function subscribeToNovel(
 
   const [row] = await db
     .insert(subscriptions)
-    .values({ userId, novelId })
+    .values({ novelId })
     .returning({ id: subscriptions.id });
 
   return { subscriptionId: row.id, isNew: true };
 }
 
 export async function unsubscribeFromNovel(novelId: string): Promise<boolean> {
-  const userId = await resolveUserId();
   const db = getDb();
 
   const result = await db
@@ -60,7 +52,6 @@ export async function unsubscribeFromNovel(novelId: string): Promise<boolean> {
     .set({ isActive: false })
     .where(
       and(
-        eq(subscriptions.userId, userId),
         eq(subscriptions.novelId, novelId),
         eq(subscriptions.isActive, true),
       ),
@@ -71,7 +62,6 @@ export async function unsubscribeFromNovel(novelId: string): Promise<boolean> {
 }
 
 export async function isSubscribed(novelId: string): Promise<boolean> {
-  const userId = await resolveUserId();
   const db = getDb();
 
   const [row] = await db
@@ -79,7 +69,6 @@ export async function isSubscribed(novelId: string): Promise<boolean> {
     .from(subscriptions)
     .where(
       and(
-        eq(subscriptions.userId, userId),
         eq(subscriptions.novelId, novelId),
         eq(subscriptions.isActive, true),
       ),

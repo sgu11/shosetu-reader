@@ -162,7 +162,7 @@ export const dictionaries = {
     // Profiles
     "profile.loading": "Loading profiles...",
     "profile.title": "Profiles",
-    "profile.subtitle": "Create local reader profiles and switch between personalized library, settings, and reading progress.",
+    "profile.subtitle": "Create local reader profiles and switch between personalized settings and reading progress.",
     "profile.create": "Create profile",
     "profile.creating": "Creating...",
     "profile.namePlaceholder": "Profile name",
@@ -366,7 +366,7 @@ export const dictionaries = {
     // Profiles
     "profile.loading": "프로필 불러오는 중...",
     "profile.title": "프로필",
-    "profile.subtitle": "로컬 리더 프로필을 만들고, 서재·설정·읽기 진행 상태를 프로필별로 전환하세요.",
+    "profile.subtitle": "로컬 리더 프로필을 만들고, 설정·읽기 진행 상태를 프로필별로 전환하세요.",
     "profile.create": "프로필 만들기",
     "profile.creating": "생성 중...",
     "profile.namePlaceholder": "프로필 이름",

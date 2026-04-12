@@ -13,6 +13,8 @@ export async function getLibrary(): Promise<{
   const userId = await resolveUserId();
   const db = getDb();
 
+  // Subscriptions are universal (shared across profiles).
+  // Reading progress is per-user.
   const rows = await db
     .select({
       novelId: novels.id,
@@ -36,12 +38,7 @@ export async function getLibrary(): Promise<{
         eq(readingProgress.novelId, novels.id),
       ),
     )
-    .where(
-      and(
-        eq(subscriptions.userId, userId),
-        eq(subscriptions.isActive, true),
-      ),
-    )
+    .where(eq(subscriptions.isActive, true))
     .orderBy(desc(sql`COALESCE(${readingProgress.lastReadAt}, ${subscriptions.subscribedAt})`));
 
   const [statusMap, currentEpisodeRows] = await Promise.all([
@@ -121,7 +118,6 @@ export async function getContinueReading(): Promise<
     .innerJoin(
       subscriptions,
       and(
-        eq(subscriptions.userId, userId),
         eq(subscriptions.novelId, novels.id),
         eq(subscriptions.isActive, true),
       ),

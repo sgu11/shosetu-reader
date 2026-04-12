@@ -5,7 +5,6 @@ import {
   novelTranslationPrompts,
   readerPreferences,
   readingProgress,
-  subscriptions,
   translationSettings,
   users,
 } from "@/lib/db/schema";
@@ -172,46 +171,7 @@ export async function migrateGuestStateToProfile(
         .where(eq(novelTranslationPrompts.id, prompt.id));
     }
 
-    const guestSubscriptions = await tx
-      .select()
-      .from(subscriptions)
-      .where(eq(subscriptions.userId, guestUserId));
-
-    for (const subscription of guestSubscriptions) {
-      const [targetSubscription] = await tx
-        .select()
-        .from(subscriptions)
-        .where(
-          and(
-            eq(subscriptions.userId, targetUserId),
-            eq(subscriptions.novelId, subscription.novelId),
-          ),
-        )
-        .limit(1);
-
-      if (!targetSubscription) {
-        await tx.insert(subscriptions).values({
-          userId: targetUserId,
-          novelId: subscription.novelId,
-          isActive: subscription.isActive,
-          subscribedAt: subscription.subscribedAt,
-          lastCheckedAt: subscription.lastCheckedAt,
-        });
-      } else if (subscription.isActive && !targetSubscription.isActive) {
-        await tx
-          .update(subscriptions)
-          .set({
-            isActive: true,
-            subscribedAt: subscription.subscribedAt,
-            lastCheckedAt: subscription.lastCheckedAt,
-          })
-          .where(eq(subscriptions.id, targetSubscription.id));
-      }
-
-      await tx
-        .delete(subscriptions)
-        .where(eq(subscriptions.id, subscription.id));
-    }
+    // Subscriptions are universal (not per-user), so no migration needed.
 
     const guestProgressRows = await tx
       .select()

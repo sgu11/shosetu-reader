@@ -16,9 +16,6 @@ export const subscriptions = pgTable(
   "subscriptions",
   {
     id: uuid().primaryKey().defaultRandom(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
     novelId: uuid("novel_id")
       .notNull()
       .references(() => novels.id, { onDelete: "cascade" }),
@@ -29,7 +26,7 @@ export const subscriptions = pgTable(
     lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("subscriptions_user_novel_idx").on(table.userId, table.novelId),
+    uniqueIndex("subscriptions_novel_idx").on(table.novelId),
   ],
 );
 
