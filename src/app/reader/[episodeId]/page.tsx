@@ -52,15 +52,33 @@ export default async function ReaderPage({ params }: Props) {
         initialProgressPercent={progress?.progressPercent ?? null}
       />
 
-      {/* Reader header — minimal chrome */}
-      <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-6 py-3">
+      {/* Back link — scrolls away */}
+      <div className="border-b border-border">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-6 py-2">
           <Link
             href={`/novels/${novel.id}`}
-            className="text-sm text-muted hover:text-foreground transition-colors truncate max-w-[40%]"
+            className="text-sm text-muted hover:text-foreground transition-colors truncate"
           >
             &larr; {novel.titleJa}
           </Link>
+          <span className="text-xs text-muted">#{episode.episodeNumber}</span>
+        </div>
+      </div>
+
+      {/* Sticky navigation bar — prev/next + translation controls */}
+      <nav className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-2 px-6 py-2">
+          {navigation.prevEpisodeId ? (
+            <Link
+              href={`/reader/${navigation.prevEpisodeId}`}
+              className="shrink-0 rounded-md bg-surface-strong px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-contrast"
+            >
+              &larr;
+            </Link>
+          ) : (
+            <span className="invisible shrink-0 rounded-md bg-surface-strong px-4 py-2 text-sm font-medium">&larr;</span>
+          )}
+
           <div className="flex items-center gap-2">
             <TranslationToggle
               episodeId={episodeId}
@@ -72,37 +90,16 @@ export default async function ReaderPage({ params }: Props) {
             />
             <ReaderSettings />
           </div>
-          <span className="code-label">
-            #{episode.episodeNumber}
-          </span>
-        </div>
-      </header>
-
-      {/* Top navigation */}
-      <nav className="border-b border-border">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-6 py-3">
-          {navigation.prevEpisodeId ? (
-            <Link
-              href={`/reader/${navigation.prevEpisodeId}`}
-              className="rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-contrast"
-            >
-              &larr; {t(locale, "reader.previous")}
-            </Link>
-          ) : (
-            <span className="invisible rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium">{t(locale, "reader.previous")}</span>
-          )}
-
-          <span className="text-xs text-muted">#{episode.episodeNumber}</span>
 
           {navigation.nextEpisodeId ? (
             <Link
               href={`/reader/${navigation.nextEpisodeId}`}
-              className="rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-contrast"
+              className="shrink-0 rounded-md bg-surface-strong px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-contrast"
             >
-              {t(locale, "reader.next")} &rarr;
+              &rarr;
             </Link>
           ) : (
-            <span className="invisible rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium">{t(locale, "reader.next")}</span>
+            <span className="invisible shrink-0 rounded-md bg-surface-strong px-4 py-2 text-sm font-medium">&rarr;</span>
           )}
         </div>
       </nav>
@@ -168,7 +165,12 @@ export default async function ReaderPage({ params }: Props) {
             <span className="invisible rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium">{t(locale, "reader.previous")}</span>
           )}
 
-          <span className="text-xs text-muted">#{episode.episodeNumber}</span>
+          <Link
+            href={`/novels/${novel.id}`}
+            className="text-xs text-muted hover:text-foreground transition-colors"
+          >
+            #{episode.episodeNumber}
+          </Link>
 
           {navigation.nextEpisodeId ? (
             <Link
