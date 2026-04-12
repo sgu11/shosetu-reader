@@ -30,14 +30,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Migration assets
+# Migration runner and SQL files (no drizzle-kit/esbuild needed at runtime)
 COPY --from=builder /app/drizzle ./drizzle
-COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
-COPY --from=builder /app/src/lib/db/schema ./src/lib/db/schema
-COPY --from=deps /app/node_modules/drizzle-kit ./node_modules/drizzle-kit
-COPY --from=deps /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
-COPY --from=deps /app/node_modules/esbuild ./node_modules/esbuild
-COPY --from=deps /app/node_modules/@esbuild ./node_modules/@esbuild
+COPY --from=builder /app/migrate.mjs ./migrate.mjs
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x docker-entrypoint.sh
 
