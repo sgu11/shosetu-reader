@@ -7,7 +7,7 @@ import { SubscribeButton } from "@/components/subscribe-button";
 import { NovelGlossaryEditor } from "@/components/novel-glossary-editor";
 import { NovelTranslationInventory } from "@/components/novel-translation-inventory";
 import { NovelJobRefresh } from "@/components/novel-job-refresh";
-import { EpisodeTranslationProgress } from "@/components/episode-translation-progress";
+import { EpisodeList } from "@/components/episode-list";
 import { getLocale, t } from "@/lib/i18n";
 
 function shortModelName(modelName: string): string {
@@ -24,35 +24,6 @@ function formatCost(usd: number | null, locale: "en" | "ko"): string | null {
   return `$${usd.toFixed(2)}`;
 }
 
-function translationStatusLabel(
-  locale: "en" | "ko",
-  status: "queued" | "processing" | "failed",
-) {
-  switch (status) {
-    case "queued":
-      return t(locale, "status.translationQueued");
-    case "processing":
-      return t(locale, "status.translationProcessing");
-    case "failed":
-      return t(locale, "status.translationFailed");
-  }
-}
-
-function fetchStatusLabel(
-  locale: "en" | "ko",
-  status: "pending" | "fetching" | "fetched" | "failed",
-) {
-  switch (status) {
-    case "pending":
-      return t(locale, "status.fetchPending");
-    case "fetching":
-      return t(locale, "status.fetchFetching");
-    case "fetched":
-      return t(locale, "status.fetched");
-    case "failed":
-      return t(locale, "status.fetchFailed");
-  }
-}
 
 interface Props {
   params: Promise<{ novelId: string }>;
@@ -193,97 +164,11 @@ export default async function NovelDetailPage({ params }: Props) {
 
       {/* Episode list */}
       <section className="space-y-4">
-        <h2 className="text-xl font-normal">
-          {t(locale, "novel.episodesHeading")}{" "}
-          <span className="text-base text-muted">
-            ({totalCount})
-          </span>
-        </h2>
-
-        {episodes.length === 0 ? (
-          <div className="surface-card rounded-xl p-7 text-center text-sm text-muted">
-            {t(locale, "novel.noEpisodes")}
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {episodes.map((ep) => {
-              const isReadable = ep.fetchStatus === "fetched";
-              const inner = (
-                <>
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className="text-sm text-muted">
-                      #{ep.episodeNumber}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      {locale === "ko" && ep.titleKo ? (
-                        <>
-                          <span className="block truncate text-sm">{ep.titleKo}</span>
-                          <span className="block truncate text-xs text-muted/60">{ep.titleJa}</span>
-                        </>
-                      ) : (
-                        <span className="text-sm">
-                          {ep.titleJa ?? `Episode ${ep.episodeNumber}`}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                    {ep.translationStatus === "available" ? (
-                      <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success" title={ep.translationModel ?? undefined}>
-                        KR
-                      </span>
-                    ) : ep.translationStatus === "queued" || ep.translationStatus === "processing" ? (
-                      <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">
-                        {translationStatusLabel(locale, ep.translationStatus)}
-                      </span>
-                    ) : ep.translationStatus === "failed" ? (
-                      <span className="rounded-full bg-error/10 px-2 py-0.5 text-xs text-error">
-                        {translationStatusLabel(locale, "failed")}
-                      </span>
-                    ) : null}
-                    {ep.translationModel && ep.translationStatus === "available" && (
-                      <span className="text-xs text-muted">
-                        {ep.translationModel.split("/").pop()}
-                      </span>
-                    )}
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        ep.fetchStatus === "fetched"
-                          ? "bg-success/10 text-success"
-                          : ep.fetchStatus === "failed"
-                            ? "bg-error/10 text-error"
-                            : "bg-surface-strong text-muted"
-                      }`}
-                    >
-                      {fetchStatusLabel(locale, ep.fetchStatus)}
-                    </span>
-                  </div>
-                </>
-              );
-
-              const isTranslating = ep.translationStatus === "processing";
-
-              return isReadable ? (
-                <Link
-                  key={ep.id}
-                  href={`/reader/${ep.id}`}
-                  className="flex flex-col gap-3 rounded-lg border border-border bg-surface px-5 py-3 transition-colors hover:border-border-strong hover:bg-surface-strong sm:flex-row sm:items-center sm:justify-between"
-                >
-                  {inner}
-                  {isTranslating && <EpisodeTranslationProgress episodeId={ep.id} />}
-                </Link>
-              ) : (
-                <div
-                  key={ep.id}
-                  className="flex flex-col gap-3 rounded-lg border border-border bg-surface px-5 py-3 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  {inner}
-                  {isTranslating && <EpisodeTranslationProgress episodeId={ep.id} />}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <EpisodeList
+          novelId={novelId}
+          initialEpisodes={episodes}
+          totalCount={totalCount}
+        />
       </section>
     </main>
   );

@@ -98,6 +98,10 @@ export const dictionaries = {
     "ingest.bulkTranslateNone": "No untranslated episodes found",
     "ingest.requestFailed": "Could not start that action. Please try again.",
     "ingest.jobRestored": "Reconnected to the active background job.",
+    "ingest.abortTranslation": "Abort translation",
+    "ingest.abortSuccess": "Translation session aborted",
+    "ingest.abortFailed": "Failed to abort",
+    "ingest.noActiveSession": "No active translation session",
 
     // Reader
     "reader.episodeList": "Episode list",
@@ -384,6 +388,10 @@ export const dictionaries = {
     "ingest.bulkTranslateNone": "미번역 에피소드가 없습니다",
     "ingest.requestFailed": "작업을 시작하지 못했습니다. 다시 시도해 주세요.",
     "ingest.jobRestored": "진행 중인 백그라운드 작업에 다시 연결했습니다.",
+    "ingest.abortTranslation": "번역 중단",
+    "ingest.abortSuccess": "번역 세션이 중단되었습니다",
+    "ingest.abortFailed": "중단 실패",
+    "ingest.noActiveSession": "진행 중인 번역 세션이 없습니다",
 
     // Reader
     "reader.episodeList": "에피소드 목록",

@@ -172,6 +172,20 @@ export function IngestButton({ novelId }: Props) {
       }
     });
 
+  const handleAbortTranslation = () =>
+    run(async () => {
+      const res = await fetch(`/api/novels/${novelId}/translate-session/abort`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setResult(data.error === "No active translation session" ? t("ingest.noActiveSession") : t("ingest.abortFailed"));
+        setResultTone("error");
+        return;
+      }
+      setResult(t("ingest.abortSuccess"));
+      setResultTone("info");
+      router.refresh();
+    });
+
   return (
     <div className="space-y-2">
       <div className="relative inline-block" ref={menuRef}>
@@ -233,6 +247,15 @@ export function IngestButton({ novelId }: Props) {
               {t("ingest.bulkTranslateAll")}
             </button>
 
+            <div className="my-1 border-t border-border" />
+
+            <button
+              type="button"
+              onClick={handleAbortTranslation}
+              className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-error transition-colors hover:bg-error/10"
+            >
+              {t("ingest.abortTranslation")}
+            </button>
           </div>
         )}
       </div>
