@@ -12,6 +12,7 @@ import { env } from "@/lib/env";
 import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
 import { getJobQueue } from "@/modules/jobs/application/job-queue";
 import { computePromptFingerprint } from "./prompt-fingerprint";
+import { estimateCost } from "./cost-estimation";
 import { renderGlossaryPrompt } from "./render-glossary-prompt";
 import { processQueuedTranslation } from "./request-translation";
 
@@ -423,15 +424,28 @@ Output ONLY the summary text, no headers or labels.`;
       const data = await res.json();
       const summary = data.choices?.[0]?.message?.content?.trim();
 
+      // Estimate summary generation cost
+      let summaryCostUsd = 0;
+      const summaryInputTokens = data.usage?.prompt_tokens;
+      const summaryOutputTokens = data.usage?.completion_tokens;
+      if (summaryInputTokens != null && summaryOutputTokens != null) {
+        summaryCostUsd = await estimateCost(
+          env.OPENROUTER_DEFAULT_MODEL,
+          summaryInputTokens,
+          summaryOutputTokens,
+        ) ?? 0;
+      }
+
       if (summary) {
-        // Update session with new summary and progress
+        // Update session with new summary, progress, and combined cost (translation + summary)
+        const translationCost = translation.estimatedCostUsd ?? 0;
         await db
           .update(translationSessions)
           .set({
             contextSummary: summary.slice(0, 2500),
             lastEpisodeNumber: payload.episodeNumber,
             episodeCount: sql`${translationSessions.episodeCount} + 1`,
-            totalCostUsd: sql`${translationSessions.totalCostUsd} + ${translation.estimatedCostUsd ?? 0}`,
+            totalCostUsd: sql`${translationSessions.totalCostUsd} + ${translationCost + summaryCostUsd}`,
             updatedAt: new Date(),
           })
           .where(eq(translationSessions.id, payload.sessionId));

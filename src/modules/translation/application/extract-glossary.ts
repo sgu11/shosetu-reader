@@ -2,6 +2,8 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { episodes, translations, novelGlossaryEntries } from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import { logger } from "@/lib/logger";
+import { estimateCost } from "./cost-estimation";
 import { importGlossaryEntries, type GlossaryEntryInput } from "./glossary-entries";
 
 const EXTRACTION_SYSTEM_PROMPT = `You are a glossary extraction assistant for Japanese-to-Korean web novel translation.
@@ -125,6 +127,22 @@ export async function extractGlossaryTerms(
   const data = await res.json();
   const content = data.choices?.[0]?.message?.content;
   if (!content) return { imported: 0, skipped: 0 };
+
+  // Log extraction cost for visibility
+  const extractInputTokens = data.usage?.prompt_tokens;
+  const extractOutputTokens = data.usage?.completion_tokens;
+  if (extractInputTokens != null && extractOutputTokens != null) {
+    const cost = await estimateCost(env.OPENROUTER_DEFAULT_MODEL, extractInputTokens, extractOutputTokens);
+    if (cost != null) {
+      logger.info("Glossary extraction cost", {
+        novelId: payload.novelId,
+        episodeNumber: payload.episodeNumber,
+        inputTokens: extractInputTokens,
+        outputTokens: extractOutputTokens,
+        costUsd: cost,
+      });
+    }
+  }
 
   // Parse the JSON response
   let rawEntries: Array<{

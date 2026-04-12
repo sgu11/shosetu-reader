@@ -87,12 +87,15 @@ export class OpenRouterProvider implements TranslationProvider {
       content: `Translate the following Japanese text to Korean${chunkNote}:\n\n${request.sourceText}`,
     });
 
-    // Adaptive max_tokens: ~1.2x expansion ratio, ~2 chars/token for Korean
+    // Adaptive max_tokens: ~1.5x expansion ratio, ~2 chars/token for Korean
     const sourceChars = request.sourceText.length;
     const adaptiveMaxTokens = Math.min(
-      Math.max(Math.ceil((sourceChars * 1.2) / 2) + 400, 2048),
-      16384,
+      Math.max(Math.ceil((sourceChars * 1.5) / 2) + 512, 2048),
+      32768,
     );
+
+    let currentMaxTokens = adaptiveMaxTokens;
+    let truncationRetried = false;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -107,7 +110,7 @@ export class OpenRouterProvider implements TranslationProvider {
           model: this.modelName,
           messages,
           temperature: 0.3,
-          max_tokens: adaptiveMaxTokens,
+          max_tokens: currentMaxTokens,
         }),
       });
 
@@ -125,9 +128,17 @@ export class OpenRouterProvider implements TranslationProvider {
 
       const data = await res.json();
       const content = data.choices?.[0]?.message?.content;
+      const finishReason = data.choices?.[0]?.finish_reason as string | undefined;
 
       if (!content) {
         throw new Error("No translation content in OpenRouter response");
+      }
+
+      // Retry once with doubled max_tokens if output was truncated
+      if (finishReason === "length" && !truncationRetried) {
+        truncationRetried = true;
+        currentMaxTokens = Math.min(currentMaxTokens * 2, 65536);
+        continue;
       }
 
       return {
@@ -136,6 +147,7 @@ export class OpenRouterProvider implements TranslationProvider {
         modelName: this.modelName,
         inputTokens: data.usage?.prompt_tokens ?? undefined,
         outputTokens: data.usage?.completion_tokens ?? undefined,
+        finishReason,
       };
     }
 

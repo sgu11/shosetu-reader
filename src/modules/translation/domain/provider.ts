@@ -14,6 +14,7 @@ export interface TranslationResult {
   modelName: string;
   inputTokens?: number;
   outputTokens?: number;
+  finishReason?: string;
 }
 
 export interface TranslationProvider {

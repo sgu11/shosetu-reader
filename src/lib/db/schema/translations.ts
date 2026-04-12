@@ -108,6 +108,7 @@ export const novelGlossaries = pgTable("novel_glossaries", {
   glossaryVersion: integer("glossary_version").notNull().default(1),
   modelName: text("model_name"),
   episodeCount: integer("episode_count"),
+  estimatedCostUsd: real("estimated_cost_usd"),
   generatedAt: timestamp("generated_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

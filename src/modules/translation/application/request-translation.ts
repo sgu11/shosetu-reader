@@ -295,6 +295,7 @@ export async function processQueuedTranslation(
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let hasTokenInfo = true;
+    let hadTruncation = false;
 
     if (!isChunked) {
       // Single-pass translation (original path)
@@ -305,6 +306,7 @@ export async function processQueuedTranslation(
       }, payload.contextSummary);
 
       finalTranslatedText = result.translatedText;
+      if (result.finishReason === "length") hadTruncation = true;
       if (result.inputTokens != null && result.outputTokens != null) {
         totalInputTokens = result.inputTokens;
         totalOutputTokens = result.outputTokens;
@@ -326,6 +328,7 @@ export async function processQueuedTranslation(
         }, payload.contextSummary);
 
         translatedChunks.push(result.translatedText);
+        if (result.finishReason === "length") hadTruncation = true;
 
         // Keep tail of this chunk's translation for next chunk's context
         previousTail = result.translatedText.slice(-500);
@@ -366,6 +369,14 @@ export async function processQueuedTranslation(
       chunkCount: isChunked ? chunks.length : null,
       confirmedTerms: confirmedEntries.length > 0 ? confirmedEntries : undefined,
     });
+
+    if (hadTruncation) {
+      qualityWarnings.push({
+        code: "API_TRUNCATION",
+        message: "API returned finish_reason=length — output may be truncated despite retry with higher max_tokens",
+        severity: "error",
+      });
+    }
 
     await db
       .update(translations)

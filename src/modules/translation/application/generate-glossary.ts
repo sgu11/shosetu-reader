@@ -2,6 +2,7 @@ import { eq, and, asc, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { episodes, translations, novelGlossaries, novelGlossaryEntries } from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import { estimateCost } from "./cost-estimation";
 import { importGlossaryEntries, type GlossaryEntryInput } from "./glossary-entries";
 
 const GLOSSARY_SYSTEM_PROMPT = `You are a professional translation quality reviewer specializing in Japanese-to-Korean web novel translation.
@@ -168,6 +169,14 @@ export async function generateGlossary(
     throw new Error("No glossary content in OpenRouter response");
   }
 
+  // Estimate generation cost
+  let generationCostUsd: number | null = null;
+  const genInputTokens = data.usage?.prompt_tokens;
+  const genOutputTokens = data.usage?.completion_tokens;
+  if (genInputTokens != null && genOutputTokens != null) {
+    generationCostUsd = await estimateCost(modelName, genInputTokens, genOutputTokens);
+  }
+
   // Parse JSON response
   let rawEntries: Array<{
     term_ja?: string;
@@ -247,6 +256,7 @@ export async function generateGlossary(
         glossary: styleGuide,
         modelName,
         episodeCount: rows.length,
+        estimatedCostUsd: generationCostUsd,
         generatedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -257,6 +267,7 @@ export async function generateGlossary(
       glossary: styleGuide,
       modelName,
       episodeCount: rows.length,
+      estimatedCostUsd: generationCostUsd,
       generatedAt: new Date(),
     });
   }
