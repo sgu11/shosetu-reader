@@ -22,8 +22,16 @@ export const readerPayloadSchema = z.object({
       translatedText: z.string().nullable(),
       provider: z.string().nullable(),
       modelName: z.string().nullable(),
+      errorMessage: z.string().nullable(),
     })
     .nullable(),
+  translations: z.array(
+    z.object({
+      id: z.string().uuid(),
+      modelName: z.string(),
+      completedAt: z.string().nullable(),
+    }),
+  ),
   configuredModel: z.string(),
   navigation: z.object({
     prevEpisodeId: z.string().uuid().nullable(),

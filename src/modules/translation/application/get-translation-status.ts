@@ -1,15 +1,15 @@
 import { eq, and, desc } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { translations } from "@/lib/db/schema";
-import type { TranslationStatusResponse } from "../api/schemas";
+import type { TranslationStatusResponse, TranslationRecord } from "../api/schemas";
 
 export async function getTranslationStatus(
   episodeId: string,
 ): Promise<TranslationStatusResponse> {
   const db = getDb();
 
-  // Get the most recent Korean translation for this episode
-  const [row] = await db
+  // Get all Korean translations for this episode
+  const rows = await db
     .select()
     .from(translations)
     .where(
@@ -18,10 +18,19 @@ export async function getTranslationStatus(
         eq(translations.targetLanguage, "ko"),
       ),
     )
-    .orderBy(desc(translations.createdAt))
-    .limit(1);
+    .orderBy(desc(translations.createdAt));
 
-  if (!row) {
+  const allRecords: TranslationRecord[] = rows.map((r) => ({
+    id: r.id,
+    status: r.status as TranslationRecord["status"],
+    translatedText: r.translatedText,
+    provider: r.provider,
+    modelName: r.modelName,
+    errorMessage: r.errorMessage,
+    completedAt: r.completedAt?.toISOString() ?? null,
+  }));
+
+  if (rows.length === 0) {
     return {
       episodeId,
       targetLanguage: "ko",
@@ -29,17 +38,25 @@ export async function getTranslationStatus(
       translatedText: null,
       provider: null,
       modelName: null,
+      errorMessage: null,
       completedAt: null,
+      translations: [],
     };
   }
+
+  // Pick the "active" translation: prefer in-progress, then most recent available, then most recent overall
+  const inProgress = rows.find((r) => r.status === "queued" || r.status === "processing");
+  const active = inProgress ?? rows[0];
 
   return {
     episodeId,
     targetLanguage: "ko",
-    status: row.status as TranslationStatusResponse["status"],
-    translatedText: row.translatedText,
-    provider: row.provider,
-    modelName: row.modelName,
-    completedAt: row.completedAt?.toISOString() ?? null,
+    status: active.status as TranslationStatusResponse["status"],
+    translatedText: active.translatedText,
+    provider: active.provider,
+    modelName: active.modelName,
+    errorMessage: active.errorMessage,
+    completedAt: active.completedAt?.toISOString() ?? null,
+    translations: allRecords,
   };
 }

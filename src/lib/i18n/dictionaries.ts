@@ -75,6 +75,9 @@ export const dictionaries = {
     "translation.translate": "Translate",
     "translation.translating": "Translating...",
     "translation.failedRetry": "Failed — retry",
+    "translation.rateLimited": "Rate limited — try another model",
+    "translation.retranslate": "Re-translate",
+    "translation.selectModel": "Select translation",
 
     // Ranking
     "ranking.title": "Ranking",
@@ -206,6 +209,9 @@ export const dictionaries = {
     "translation.translate": "번역",
     "translation.translating": "번역 중...",
     "translation.failedRetry": "실패 — 재시도",
+    "translation.rateLimited": "요청 제한 — 다른 모델로 시도",
+    "translation.retranslate": "재번역",
+    "translation.selectModel": "번역 선택",
 
     // Ranking
     "ranking.title": "랭킹",

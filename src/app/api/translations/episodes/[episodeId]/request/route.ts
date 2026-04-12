@@ -19,7 +19,17 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     if (!isValidUuid(episodeId)) {
       return NextResponse.json({ error: "Invalid episode ID" }, { status: 400 });
     }
-    const result = await requestTranslation(episodeId);
+    // Optional model override from request body
+    let modelOverride: string | undefined;
+    try {
+      const body = await req.json();
+      if (body.modelName && typeof body.modelName === "string" && body.modelName.length <= 200) {
+        modelOverride = body.modelName;
+      }
+    } catch {
+      // No body or invalid JSON — use default model
+    }
+    const result = await requestTranslation(episodeId, modelOverride);
     return NextResponse.json(result, { status: 202 });
   } catch (err) {
     console.error("Translation request failed:", err);

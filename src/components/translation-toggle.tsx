@@ -1,36 +1,64 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "@/lib/i18n/client";
 
 interface TranslationState {
   status: "not_requested" | "queued" | "processing" | "available" | "failed";
   translatedText: string | null;
   modelName: string | null;
+  errorMessage: string | null;
+}
+
+interface AvailableTranslation {
+  id: string;
+  modelName: string;
+  completedAt: string | null;
 }
 
 interface Props {
   episodeId: string;
   initialTranslation: TranslationState | null;
   configuredModel: string;
+  availableTranslations: AvailableTranslation[];
 }
 
-export function TranslationToggle({ episodeId, initialTranslation, configuredModel }: Props) {
+export function TranslationToggle({
+  episodeId,
+  initialTranslation,
+  configuredModel,
+  availableTranslations: initialAvailable,
+}: Props) {
   const { t } = useTranslation();
   const [language, setLanguage] = useState<"ja" | "ko">(
     initialTranslation?.status === "available" ? "ko" : "ja",
   );
   const [translation, setTranslation] = useState<TranslationState>(
-    initialTranslation ?? { status: "not_requested", translatedText: null, modelName: null },
+    initialTranslation ?? { status: "not_requested", translatedText: null, modelName: null, errorMessage: null },
   );
+  const [available, setAvailable] = useState<AvailableTranslation[]>(initialAvailable);
   const [requesting, setRequesting] = useState(false);
   const [autoSwitchOnComplete, setAutoSwitchOnComplete] = useState(false);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
 
   const hasTranslation = translation.status === "available";
   const isTranslating = translation.status === "queued" || translation.status === "processing";
   const isFailed = translation.status === "failed";
+  const isRateLimited = isFailed && (translation.errorMessage?.includes("429") || translation.errorMessage?.includes("rate-limit"));
   const displayModel = translation.modelName ?? configuredModel;
   const shortModel = displayModel.split("/").pop() ?? displayModel;
+
+  // Close model menu on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+        setModelMenuOpen(false);
+      }
+    }
+    if (modelMenuOpen) document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [modelMenuOpen]);
 
   const pollStatus = useCallback(async () => {
     const res = await fetch(
@@ -42,7 +70,20 @@ export function TranslationToggle({ episodeId, initialTranslation, configuredMod
         status: data.status,
         translatedText: data.translatedText,
         modelName: data.modelName,
+        errorMessage: data.errorMessage ?? null,
       });
+      // Update available translations list
+      if (data.translations) {
+        setAvailable(
+          data.translations
+            .filter((tr: { status: string }) => tr.status === "available")
+            .map((tr: { id: string; modelName: string; completedAt: string | null }) => ({
+              id: tr.id,
+              modelName: tr.modelName,
+              completedAt: tr.completedAt,
+            })),
+        );
+      }
       return data.status;
     }
     return null;
@@ -56,7 +97,6 @@ export function TranslationToggle({ episodeId, initialTranslation, configuredMod
       const status = await pollStatus();
       if (status === "available" || status === "failed") {
         clearInterval(interval);
-        // Auto-switch to KR when translation completes from a user-initiated request
         if (status === "available" && autoSwitchOnComplete) {
           setAutoSwitchOnComplete(false);
           setLanguage("ko");
@@ -68,30 +108,32 @@ export function TranslationToggle({ episodeId, initialTranslation, configuredMod
     return () => clearInterval(interval);
   }, [isTranslating, pollStatus, autoSwitchOnComplete]);
 
-  async function requestTranslation() {
+  async function requestTranslation(modelOverride?: string) {
     if (requesting || isTranslating) return;
     setRequesting(true);
     setAutoSwitchOnComplete(true);
     try {
       const res = await fetch(
         `/api/translations/episodes/${episodeId}/request`,
-        { method: "POST" },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(modelOverride ? { modelName: modelOverride } : {}),
+        },
       );
       if (res.ok) {
         const data = await res.json();
         setTranslation((prev) => ({
           ...prev,
           status: data.status,
-          modelName: prev.modelName,
+          errorMessage: null,
         }));
-        // If it returned an existing available translation, switch immediately
         if (data.status === "available") {
           await pollStatus();
           setAutoSwitchOnComplete(false);
           setLanguage("ko");
           setRequesting(false);
         }
-        // Otherwise, the poll interval will handle the switch when translation completes
       } else {
         setAutoSwitchOnComplete(false);
         setRequesting(false);
@@ -103,8 +145,29 @@ export function TranslationToggle({ episodeId, initialTranslation, configuredMod
   }
 
   function handleToggle(lang: "ja" | "ko") {
-    if (lang === "ko" && !hasTranslation) return; // KR is dimmed, no-op
+    if (lang === "ko" && !hasTranslation) return;
     setLanguage(lang);
+  }
+
+  // Switch to a specific model's translation
+  async function switchToModel(modelName: string) {
+    setModelMenuOpen(false);
+    // Fetch the full translation text for this model
+    const res = await fetch(`/api/translations/episodes/${episodeId}/status`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const record = data.translations?.find(
+      (tr: { modelName: string; status: string }) => tr.modelName === modelName && tr.status === "available",
+    );
+    if (record) {
+      setTranslation({
+        status: "available",
+        translatedText: record.translatedText,
+        modelName: record.modelName,
+        errorMessage: null,
+      });
+      setLanguage("ko");
+    }
   }
 
   // Show/hide the translated vs original text via DOM visibility
@@ -115,7 +178,6 @@ export function TranslationToggle({ episodeId, initialTranslation, configuredMod
     if (!readerEl || !originalEl) return;
 
     if (language === "ko" && hasTranslation && translation.translatedText) {
-      // Build translated paragraphs safely using textContent (no innerHTML)
       while (readerEl.firstChild) {
         readerEl.removeChild(readerEl.firstChild);
       }
@@ -135,6 +197,10 @@ export function TranslationToggle({ episodeId, initialTranslation, configuredMod
       originalEl.classList.remove("hidden");
     }
   }, [language, hasTranslation, translation.translatedText]);
+
+  const hasMultipleModels = available.length > 1;
+  // Models that differ from current — for re-translate suggestions
+  const otherModels = available.filter((a) => a.modelName !== displayModel);
 
   return (
     <div className="flex items-center gap-2">
@@ -167,11 +233,11 @@ export function TranslationToggle({ episodeId, initialTranslation, configuredMod
         </button>
       </div>
 
-      {/* Translate button — shown when no translation or failed */}
-      {(!hasTranslation && !isTranslating) && (
+      {/* Translate / Retry button — shown when no translation and not translating */}
+      {!hasTranslation && !isTranslating && !isRateLimited && (
         <button
           type="button"
-          onClick={requestTranslation}
+          onClick={() => requestTranslation()}
           disabled={requesting}
           className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/5 px-3 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
         >
@@ -180,19 +246,100 @@ export function TranslationToggle({ episodeId, initialTranslation, configuredMod
         </button>
       )}
 
+      {/* Rate-limited alert — show error with suggestion to change model */}
+      {isRateLimited && (
+        <div className="flex items-center gap-1.5">
+          <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/5 px-3 py-1 text-xs font-medium text-warning">
+            {t("translation.rateLimited")}
+          </span>
+          <button
+            type="button"
+            onClick={() => requestTranslation()}
+            disabled={requesting}
+            className="rounded-full border border-border px-2.5 py-1 text-xs text-muted transition-colors hover:text-foreground hover:bg-surface-strong disabled:opacity-50"
+          >
+            {t("translation.failedRetry")}
+          </button>
+        </div>
+      )}
+
       {/* Translating indicator */}
       {isTranslating && (
         <span className="inline-flex items-center gap-1.5 text-xs text-muted">
           <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
           {t("translation.translating")}
+          <span className="text-muted/60">{shortModel}</span>
         </span>
       )}
 
-      {/* Model info when translation is available */}
-      {hasTranslation && translation.modelName && (
-        <span className="text-xs text-muted/60" title={translation.modelName}>
-          {shortModel}
-        </span>
+      {/* Model selector + re-translate — when translation is available */}
+      {hasTranslation && (
+        <div className="relative flex items-center gap-1.5" ref={modelMenuRef}>
+          {/* Current model badge / dropdown trigger */}
+          <button
+            type="button"
+            onClick={() => setModelMenuOpen(!modelMenuOpen)}
+            className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs text-muted transition-colors hover:text-foreground hover:bg-surface-strong"
+            title={displayModel}
+          >
+            {shortModel}
+            {(hasMultipleModels || true) && (
+              <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            )}
+          </button>
+
+          {/* Dropdown menu */}
+          {modelMenuOpen && (
+            <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-lg border border-border bg-surface p-1.5 space-y-0.5">
+              {/* Available translations from other models */}
+              {available.map((tr) => {
+                const isActive = tr.modelName === translation.modelName;
+                const short = tr.modelName.split("/").pop() ?? tr.modelName;
+                return (
+                  <button
+                    key={tr.id}
+                    type="button"
+                    onClick={() => switchToModel(tr.modelName)}
+                    className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-xs transition-colors ${
+                      isActive
+                        ? "bg-surface-strong text-foreground"
+                        : "text-muted hover:text-foreground hover:bg-surface-strong"
+                    }`}
+                  >
+                    <span className="truncate">{short}</span>
+                    {isActive && (
+                      <span className="ml-2 shrink-0 text-accent">&#10003;</span>
+                    )}
+                  </button>
+                );
+              })}
+
+              {available.length > 0 && (
+                <div className="my-1 border-t border-border" />
+              )}
+
+              {/* Re-translate with configured model */}
+              {(!translation.modelName || translation.modelName !== configuredModel || otherModels.length === 0) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModelMenuOpen(false);
+                    requestTranslation(configuredModel);
+                  }}
+                  disabled={requesting || isTranslating}
+                  className="flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-left text-xs text-accent transition-colors hover:bg-surface-strong disabled:opacity-50"
+                >
+                  {t("translation.retranslate")}
+                  <span className="text-accent/60">
+                    {configuredModel.split("/").pop()}
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

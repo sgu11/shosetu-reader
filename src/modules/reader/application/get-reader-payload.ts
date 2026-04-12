@@ -52,8 +52,8 @@ export async function getReaderPayload(
     .orderBy(episodes.episodeNumber)
     .limit(1);
 
-  // Check for available translation
-  const [translation] = await db
+  // Get all Korean translations for this episode
+  const allTranslations = await db
     .select()
     .from(translations)
     .where(
@@ -62,8 +62,12 @@ export async function getReaderPayload(
         eq(translations.targetLanguage, "ko"),
       ),
     )
-    .orderBy(desc(translations.createdAt))
-    .limit(1);
+    .orderBy(desc(translations.createdAt));
+
+  // Pick the "active" translation: prefer in-progress, then most recent
+  const translation = allTranslations.find(
+    (r) => r.status === "queued" || r.status === "processing",
+  ) ?? allTranslations[0] ?? null;
 
   // Get user's configured translation model
   const userId = getDefaultUserId();
@@ -102,8 +106,16 @@ export async function getReaderPayload(
           translatedText: translation.translatedText,
           provider: translation.provider,
           modelName: translation.modelName,
+          errorMessage: translation.errorMessage,
         }
       : null,
+    translations: allTranslations
+      .filter((t) => t.status === "available")
+      .map((t) => ({
+        id: t.id,
+        modelName: t.modelName,
+        completedAt: t.completedAt?.toISOString() ?? null,
+      })),
     configuredModel,
     navigation: {
       prevEpisodeId: prevEpisode?.id ?? null,

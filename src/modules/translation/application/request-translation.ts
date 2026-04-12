@@ -48,6 +48,7 @@ async function loadTranslationContext(novelId: string) {
  */
 export async function requestTranslation(
   episodeId: string,
+  modelOverride?: string,
 ): Promise<{ translationId: string; status: string }> {
   const db = getDb();
 
@@ -73,7 +74,7 @@ export async function requestTranslation(
 
   const provider = new OpenRouterProvider(
     env.OPENROUTER_API_KEY ?? "",
-    ctx.modelName,
+    modelOverride ?? ctx.modelName,
     ctx.globalPrompt,
     ctx.novelPrompt,
   );
