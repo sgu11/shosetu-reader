@@ -76,7 +76,7 @@ export async function startJobWorker() {
         lastRecoveryAt = Date.now();
       }
 
-      const entry = await redis.brPop(queueKeys.pending, runtimeConfig.popTimeoutSeconds);
+      const entry = await redis.blPop(queueKeys.pending, runtimeConfig.popTimeoutSeconds);
       if (!entry?.element) {
         continue;
       }
