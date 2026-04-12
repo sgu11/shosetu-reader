@@ -1,19 +1,32 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "@/lib/i18n/client";
 
 interface ModelOption {
   id: string;
   name: string;
+  promptPrice: string | null;
+  completionPrice: string | null;
 }
 
 interface Props {
   novelId: string;
 }
 
+function formatCost(usd: number | null, locale: "en" | "ko"): string | null {
+  if (usd == null) return null;
+  if (locale === "ko") {
+    const krw = usd * 1500;
+    if (krw < 1) return `${krw.toFixed(2)}원`;
+    return `${krw.toFixed(1)}원`;
+  }
+  if (usd < 0.01) return `$${usd.toFixed(4)}`;
+  return `$${usd.toFixed(2)}`;
+}
+
 export function NovelGlossaryEditor({ novelId }: Props) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [glossary, setGlossary] = useState("");
   const [meta, setMeta] = useState<{
     modelName: string | null;
@@ -32,6 +45,12 @@ export function NovelGlossaryEditor({ novelId }: Props) {
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
 
+  // Cost estimation state
+  const [estimate, setEstimate] = useState<{
+    episodeCount: number;
+    inputChars: number;
+  } | null>(null);
+
   useEffect(() => {
     fetch(`/api/novels/${novelId}/glossary`)
       .then((res) => res.json())
@@ -42,6 +61,21 @@ export function NovelGlossaryEditor({ novelId }: Props) {
           episodeCount: data.episodeCount ?? null,
           generatedAt: data.generatedAt ?? null,
         });
+      })
+      .catch(() => {});
+  }, [novelId]);
+
+  // Load cost estimate (input size)
+  useEffect(() => {
+    fetch(`/api/novels/${novelId}/glossary?estimate=true`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.episodeCount != null) {
+          setEstimate({
+            episodeCount: data.episodeCount,
+            inputChars: data.inputChars,
+          });
+        }
       })
       .catch(() => {});
   }, [novelId]);
@@ -86,6 +120,24 @@ export function NovelGlossaryEditor({ novelId }: Props) {
     : models;
 
   const shortModel = (id: string) => id.split("/").pop() ?? id;
+
+  // Compute estimated cost based on selected model pricing and input size
+  const estimatedCost = useMemo(() => {
+    if (!estimate || estimate.episodeCount === 0 || !selectedModel) return null;
+    const model = models.find((m) => m.id === selectedModel);
+    if (!model?.promptPrice || !model?.completionPrice) return null;
+
+    const promptPricePerToken = parseFloat(model.promptPrice);
+    const completionPricePerToken = parseFloat(model.completionPrice);
+    if (isNaN(promptPricePerToken) || isNaN(completionPricePerToken)) return null;
+
+    // Estimate tokens: ~1 token per 3 chars for JP/KR mixed text
+    const inputTokens = Math.ceil(estimate.inputChars / 3);
+    // Estimate output ~2000 tokens for glossary
+    const outputTokens = 2000;
+
+    return inputTokens * promptPricePerToken + outputTokens * completionPricePerToken;
+  }, [estimate, selectedModel, models]);
 
   const save = useCallback(async () => {
     setSaving(true);
@@ -168,54 +220,73 @@ export function NovelGlossaryEditor({ novelId }: Props) {
             placeholder={t("glossary.placeholder")}
           />
 
-          {/* Model selector for generation */}
-          <div className="relative" ref={pickerRef}>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted">{t("glossary.model")}:</span>
-              <button
-                type="button"
-                onClick={() => setModelPickerOpen(!modelPickerOpen)}
-                className="code-label cursor-pointer hover:bg-surface-strong transition-colors"
-              >
-                {selectedModel ? shortModel(selectedModel) : "—"}
-              </button>
+          {/* Model selector + cost estimate */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative" ref={pickerRef}>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted">{t("glossary.model")}:</span>
+                <button
+                  type="button"
+                  onClick={() => setModelPickerOpen(!modelPickerOpen)}
+                  className="code-label cursor-pointer hover:bg-surface-strong transition-colors"
+                >
+                  {selectedModel ? shortModel(selectedModel) : "—"}
+                </button>
+              </div>
+
+              {modelPickerOpen && (
+                <div className="absolute left-0 top-full z-20 mt-1 w-80 rounded-lg border border-border bg-surface p-2 shadow-lg">
+                  <input
+                    type="text"
+                    value={modelSearch}
+                    onChange={(e) => setModelSearch(e.target.value)}
+                    placeholder={t("settings.searchModels")}
+                    className="mb-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted/50 focus:border-border-strong focus:outline-none"
+                    autoFocus
+                  />
+                  <div className="max-h-48 overflow-y-auto">
+                    {filteredModels.slice(0, 30).map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedModel(m.id);
+                          setModelPickerOpen(false);
+                          setModelSearch("");
+                        }}
+                        className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-surface-strong ${
+                          selectedModel === m.id ? "text-accent" : "text-muted"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate">{m.name}</p>
+                          <p className="truncate text-xs text-muted/60">{m.id}</p>
+                        </div>
+                      </button>
+                    ))}
+                    {filteredModels.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-muted">{t("settings.noModelsFound")}</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {modelPickerOpen && (
-              <div className="absolute left-0 top-full z-20 mt-1 w-80 rounded-lg border border-border bg-surface p-2 shadow-lg">
-                <input
-                  type="text"
-                  value={modelSearch}
-                  onChange={(e) => setModelSearch(e.target.value)}
-                  placeholder={t("settings.searchModels")}
-                  className="mb-2 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted/50 focus:border-border-strong focus:outline-none"
-                  autoFocus
-                />
-                <div className="max-h-48 overflow-y-auto">
-                  {filteredModels.slice(0, 30).map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedModel(m.id);
-                        setModelPickerOpen(false);
-                        setModelSearch("");
-                      }}
-                      className={`flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-surface-strong ${
-                        selectedModel === m.id ? "text-accent" : "text-muted"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate">{m.name}</p>
-                        <p className="truncate text-xs text-muted/60">{m.id}</p>
-                      </div>
-                    </button>
-                  ))}
-                  {filteredModels.length === 0 && (
-                    <p className="px-3 py-2 text-xs text-muted">{t("settings.noModelsFound")}</p>
-                  )}
-                </div>
+            {/* Cost estimation indicator */}
+            {estimate && estimate.episodeCount > 0 && (
+              <div className="flex items-center gap-2 text-xs text-muted">
+                <span>{t("glossary.episodes", { count: estimate.episodeCount })}</span>
+                <span className="text-muted/40">|</span>
+                <span>
+                  {t("glossary.estimatedCost")}:{" "}
+                  <span className="text-foreground">
+                    {estimatedCost != null ? formatCost(estimatedCost, locale) ?? "—" : "—"}
+                  </span>
+                </span>
               </div>
+            )}
+            {estimate && estimate.episodeCount === 0 && (
+              <span className="text-xs text-muted/60">{t("glossary.noEpisodes")}</span>
             )}
           </div>
 
@@ -231,7 +302,7 @@ export function NovelGlossaryEditor({ novelId }: Props) {
             <button
               type="button"
               onClick={generate}
-              disabled={generating}
+              disabled={generating || (estimate != null && estimate.episodeCount === 0)}
               className="btn-pill btn-secondary text-xs"
             >
               {generating ? t("glossary.generating") : t("glossary.generate")}

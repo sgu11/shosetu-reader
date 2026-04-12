@@ -1,4 +1,4 @@
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { episodes, translations, novelGlossaries } from "@/lib/db/schema";
 import { env } from "@/lib/env";
@@ -142,6 +142,45 @@ export async function generateGlossary(
   }
 
   return { glossary, modelName, episodeCount: rows.length };
+}
+
+/**
+ * Estimate the input size for glossary generation without calling the LLM.
+ * Returns the number of available episodes and estimated input character count.
+ */
+export async function estimateGlossaryInput(
+  novelId: string,
+  maxEpisodes = 10,
+): Promise<{ episodeCount: number; inputChars: number }> {
+  const db = getDb();
+
+  const rows = await db
+    .select({
+      sourceLen: sql<number>`length(${episodes.normalizedTextJa})`,
+      translatedLen: sql<number>`length(${translations.translatedText})`,
+    })
+    .from(episodes)
+    .innerJoin(
+      translations,
+      and(
+        eq(translations.episodeId, episodes.id),
+        eq(translations.targetLanguage, "ko"),
+        eq(translations.status, "available"),
+      ),
+    )
+    .where(eq(episodes.novelId, novelId))
+    .orderBy(asc(episodes.episodeNumber))
+    .limit(maxEpisodes);
+
+  let inputChars = 0;
+  for (const row of rows) {
+    // Each episode contributes min(sourceLen, 3000) + min(translatedLen, 3000) + headers
+    inputChars += Math.min(row.sourceLen ?? 0, 3000) + Math.min(row.translatedLen ?? 0, 3000) + 100;
+  }
+  // Add system prompt overhead (~500 chars)
+  inputChars += 500;
+
+  return { episodeCount: rows.length, inputChars };
 }
 
 /**

@@ -3,15 +3,26 @@ import {
   generateGlossary,
   getGlossary,
   updateGlossary,
+  estimateGlossaryInput,
 } from "@/modules/translation/application/generate-glossary";
 
 interface RouteContext {
   params: Promise<{ novelId: string }>;
 }
 
-export async function GET(_req: NextRequest, context: RouteContext) {
+export async function GET(req: NextRequest, context: RouteContext) {
   try {
     const { novelId } = await context.params;
+    const estimate = req.nextUrl.searchParams.get("estimate");
+
+    if (estimate === "true") {
+      const est = await estimateGlossaryInput(novelId);
+      return NextResponse.json({
+        episodeCount: est.episodeCount,
+        inputChars: est.inputChars,
+      });
+    }
+
     const row = await getGlossary(novelId);
     return NextResponse.json({
       glossary: row?.glossary ?? "",

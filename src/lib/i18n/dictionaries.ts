@@ -187,6 +187,9 @@ export const dictionaries = {
     "glossary.generateAction": "Generate glossary",
     "glossary.generateActionBusy": "Generating glossary...",
     "glossary.model": "Model",
+    "glossary.estimatedCost": "Est. cost",
+    "glossary.noEpisodes": "No translated episodes available",
+    "glossary.episodes": "{count} episodes",
 
     // Auth
     "auth.loading": "Loading...",
@@ -397,6 +400,9 @@ export const dictionaries = {
     "glossary.generateAction": "검수 및 글로서리 작성",
     "glossary.generateActionBusy": "글로서리 생성 중...",
     "glossary.model": "모델",
+    "glossary.estimatedCost": "예상 비용",
+    "glossary.noEpisodes": "번역된 에피소드 없음",
+    "glossary.episodes": "{count}화",
 
     // Auth
     "auth.loading": "불러오는 중...",
