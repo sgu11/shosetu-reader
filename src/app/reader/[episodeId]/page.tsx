@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getReaderPayload } from "@/modules/reader/application/get-reader-payload";
 import { ProgressTracker } from "@/components/progress-tracker";
+import { TranslationToggle } from "@/components/translation-toggle";
 
 interface Props {
   params: Promise<{ episodeId: string }>;
@@ -15,8 +16,15 @@ export default async function ReaderPage({ params }: Props) {
     notFound();
   }
 
-  const { novel, episode, navigation } = payload;
+  const { novel, episode, translation, navigation } = payload;
   const paragraphs = episode.sourceTextJa?.split("\n") ?? [];
+
+  const initialTranslation = translation
+    ? {
+        status: translation.status as "queued" | "processing" | "available" | "failed",
+        translatedText: translation.translatedText,
+      }
+    : null;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -27,10 +35,14 @@ export default async function ReaderPage({ params }: Props) {
         <div className="mx-auto flex max-w-2xl items-center justify-between px-6 py-3">
           <Link
             href={`/novels/${novel.id}`}
-            className="text-sm text-muted hover:text-foreground transition-colors truncate max-w-[60%]"
+            className="text-sm text-muted hover:text-foreground transition-colors truncate max-w-[40%]"
           >
             &larr; {novel.titleJa}
           </Link>
+          <TranslationToggle
+            episodeId={episodeId}
+            initialTranslation={initialTranslation}
+          />
           <span className="code-label">
             #{episode.episodeNumber}
           </span>
@@ -48,13 +60,24 @@ export default async function ReaderPage({ params }: Props) {
 
         {/* Episode body */}
         {paragraphs.length > 0 ? (
-          <div className="reader-text space-y-1 text-base leading-[2] tracking-wide text-secondary">
-            {paragraphs.map((line, i) => (
-              <p key={i} className={line.trim() === "" ? "h-6" : ""}>
-                {line}
-              </p>
-            ))}
-          </div>
+          <>
+            {/* Original Japanese text */}
+            <div
+              data-original-text
+              className="reader-text space-y-1 text-base leading-[2] tracking-wide text-secondary"
+            >
+              {paragraphs.map((line, i) => (
+                <p key={i} className={line.trim() === "" ? "h-6" : ""}>
+                  {line}
+                </p>
+              ))}
+            </div>
+            {/* Korean translation (populated by TranslationToggle) */}
+            <div
+              data-reader-text
+              className="hidden space-y-1 text-base leading-[2] text-secondary"
+            />
+          </>
         ) : (
           <div className="surface-card rounded-xl p-8 text-center text-sm text-muted">
             Episode content has not been fetched yet.
