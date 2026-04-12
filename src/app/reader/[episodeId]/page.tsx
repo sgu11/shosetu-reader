@@ -19,13 +19,14 @@ export default async function ReaderPage({ params }: Props) {
     notFound();
   }
 
-  const { novel, episode, translation, navigation } = payload;
+  const { novel, episode, translation, configuredModel, navigation } = payload;
   const paragraphs = episode.sourceTextJa?.split("\n") ?? [];
 
   const initialTranslation = translation
     ? {
         status: translation.status as "queued" | "processing" | "available" | "failed",
         translatedText: translation.translatedText,
+        modelName: translation.modelName,
       }
     : null;
 
@@ -46,6 +47,7 @@ export default async function ReaderPage({ params }: Props) {
             <TranslationToggle
               episodeId={episodeId}
               initialTranslation={initialTranslation}
+              configuredModel={configuredModel}
             />
             <ReaderSettings />
           </div>

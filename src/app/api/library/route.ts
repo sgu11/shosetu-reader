@@ -6,7 +6,7 @@ export async function GET() {
     const library = await getLibrary();
     return NextResponse.json(library);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to fetch library";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Failed to fetch library:", err);
+    return NextResponse.json({ error: "Failed to fetch library" }, { status: 500 });
   }
 }

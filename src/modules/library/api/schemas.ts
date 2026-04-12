@@ -5,6 +5,7 @@ import { z } from "zod";
 export const libraryItemSchema = z.object({
   novelId: z.string().uuid(),
   titleJa: z.string(),
+  titleKo: z.string().nullable(),
   titleNormalized: z.string().nullable(),
   authorName: z.string().nullable(),
   isCompleted: z.boolean().nullable(),

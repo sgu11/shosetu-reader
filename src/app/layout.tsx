@@ -41,6 +41,14 @@ export default async function RootLayout({
           crossOrigin="anonymous"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-jp.min.css"
         />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/earlyaccess/nanumgothic.css"
+        />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/earlyaccess/nanummyeongjo.css"
+        />
       </head>
       <body className="min-h-full flex flex-col">
         <LocaleProvider locale={locale}>

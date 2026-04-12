@@ -15,6 +15,7 @@ export async function getLibrary(): Promise<{
     .select({
       novelId: novels.id,
       titleJa: novels.titleJa,
+      titleKo: novels.titleKo,
       titleNormalized: novels.titleNormalized,
       authorName: novels.authorName,
       isCompleted: novels.isCompleted,
@@ -59,6 +60,7 @@ export async function getLibrary(): Promise<{
     items.push({
       novelId: row.novelId,
       titleJa: row.titleJa,
+      titleKo: row.titleKo,
       titleNormalized: row.titleNormalized,
       authorName: row.authorName,
       isCompleted: row.isCompleted,

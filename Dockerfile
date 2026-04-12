@@ -34,7 +34,8 @@ COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=builder /app/src/lib/db/schema ./src/lib/db/schema
 COPY --from=deps /app/node_modules/drizzle-kit ./node_modules/drizzle-kit
 COPY --from=deps /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
+COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
+RUN chmod +x docker-entrypoint.sh
 
 USER nextjs
 

@@ -31,11 +31,29 @@ export interface EpisodeContent {
 
 /**
  * Fetch and parse the novel's table of contents to get episode list.
+ * Follows pagination automatically (Syosetu shows ~100 episodes per page).
  */
 export async function fetchEpisodeList(ncode: string): Promise<TocEntry[]> {
-  const url = buildNovelUrl(ncode);
-  const html = await fetchPage(url);
-  return parseToc(html, ncode);
+  const allEntries: TocEntry[] = [];
+  let page = 1;
+
+  while (true) {
+    const url = page === 1
+      ? buildNovelUrl(ncode)
+      : `${buildNovelUrl(ncode)}?p=${page}`;
+    const html = await fetchPage(url);
+    const entries = parseToc(html, ncode);
+
+    if (entries.length === 0) break;
+    allEntries.push(...entries);
+
+    // Check if there's a next page
+    const lastPage = parseLastPage(html);
+    if (page >= lastPage) break;
+    page++;
+  }
+
+  return allEntries;
 }
 
 /**
@@ -62,6 +80,19 @@ async function fetchPage(url: string): Promise<string> {
   }
 
   return res.text();
+}
+
+/**
+ * Extract the last page number from the TOC pagination.
+ * Looks for: <a href="/ncode/?p=N" class="c-pager__item c-pager__item--last">
+ * Returns 1 if no pagination is found.
+ */
+function parseLastPage(html: string): number {
+  const $ = cheerio.load(html);
+  const lastLink = $("a.c-pager__item--last").first().attr("href");
+  if (!lastLink) return 1;
+  const match = lastLink.match(/[?&]p=(\d+)/);
+  return match ? parseInt(match[1], 10) : 1;
 }
 
 export function parseToc(html: string, ncode: string): TocEntry[] {

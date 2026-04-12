@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { translations } from "@/lib/db/schema";
 import type { TranslationStatusResponse } from "../api/schemas";
@@ -18,7 +18,7 @@ export async function getTranslationStatus(
         eq(translations.targetLanguage, "ko"),
       ),
     )
-    .orderBy(translations.createdAt)
+    .orderBy(desc(translations.createdAt))
     .limit(1);
 
   if (!row) {

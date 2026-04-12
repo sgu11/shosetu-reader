@@ -59,16 +59,19 @@ export default async function NovelDetailPage({ params }: Props) {
         </div>
 
         <h1 className="text-3xl font-normal leading-none tracking-tight">
-          {novel.titleJa}
+          {locale === "ko" && novel.titleKo ? novel.titleKo : novel.titleJa}
         </h1>
+        {locale === "ko" && novel.titleKo && (
+          <p className="text-sm text-muted/60">{novel.titleJa}</p>
+        )}
 
         {novel.authorName && (
           <p className="text-sm text-muted">{t(locale, "novel.by")} {novel.authorName}</p>
         )}
 
-        {novel.summaryJa && (
-          <div className="reader-text max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-5 text-sm leading-8 text-muted">
-            {novel.summaryJa}
+        {(novel.summaryJa || novel.summaryKo) && (
+          <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-background p-5 text-sm leading-8 text-muted">
+            {locale === "ko" && novel.summaryKo ? novel.summaryKo : novel.summaryJa}
           </div>
         )}
 
@@ -132,9 +135,22 @@ export default async function NovelDetailPage({ params }: Props) {
                     </span>
                   </div>
                   <div className="flex items-center gap-3">
-                    {ep.hasTranslation && (
-                      <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">
+                    {ep.translationStatus === "available" ? (
+                      <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success" title={ep.translationModel ?? undefined}>
                         KR
+                      </span>
+                    ) : ep.translationStatus === "queued" || ep.translationStatus === "processing" ? (
+                      <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent">
+                        {ep.translationStatus === "queued" ? "queued" : "translating"}
+                      </span>
+                    ) : ep.translationStatus === "failed" ? (
+                      <span className="rounded-full bg-error/10 px-2 py-0.5 text-xs text-error">
+                        failed
+                      </span>
+                    ) : null}
+                    {ep.translationModel && ep.translationStatus === "available" && (
+                      <span className="text-xs text-muted">
+                        {ep.translationModel.split("/").pop()}
                       </span>
                     )}
                     <span

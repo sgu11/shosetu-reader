@@ -15,6 +15,13 @@
       "when": 1775806981984,
       "tag": "0001_orange_blizzard",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775809036765,
+      "tag": "0002_flaky_iceman",
+      "breakpoints": true
     }
   ]
 }

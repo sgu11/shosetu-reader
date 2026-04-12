@@ -72,6 +72,7 @@ export const dictionaries = {
     "reader.noContent": "Episode content has not been fetched yet.",
 
     // Translation toggle
+    "translation.translate": "Translate",
     "translation.translating": "Translating...",
     "translation.failedRetry": "Failed — retry",
 
@@ -89,11 +90,14 @@ export const dictionaries = {
     "ranking.ongoing": "Ongoing",
     "ranking.view": "View",
     "ranking.register": "Register",
+    "ranking.translatingTitles": "Translating titles...",
 
     // Settings
     "settings.title": "Settings",
     "settings.language": "Language",
     "settings.readerSettings": "Reader settings",
+    "settings.fontFamily": "Font",
+    "settings.fontWeight": "Weight",
     "settings.fontSize": "Font size",
     "settings.lineHeight": "Line height",
     "settings.contentWidth": "Content width",
@@ -199,6 +203,7 @@ export const dictionaries = {
     "reader.noContent": "에피소드 내용이 아직 수집되지 않았습니다.",
 
     // Translation toggle
+    "translation.translate": "번역",
     "translation.translating": "번역 중...",
     "translation.failedRetry": "실패 — 재시도",
 
@@ -216,11 +221,14 @@ export const dictionaries = {
     "ranking.ongoing": "연재 중",
     "ranking.view": "보기",
     "ranking.register": "등록",
+    "ranking.translatingTitles": "제목 번역 중...",
 
     // Settings
     "settings.title": "설정",
     "settings.language": "언어",
     "settings.readerSettings": "리더 설정",
+    "settings.fontFamily": "글꼴",
+    "settings.fontWeight": "굵기",
     "settings.fontSize": "글자 크기",
     "settings.lineHeight": "줄 간격",
     "settings.contentWidth": "콘텐츠 너비",

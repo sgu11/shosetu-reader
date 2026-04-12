@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { env } from "@/lib/env";
+import { rateLimit } from "@/lib/rate-limit";
 
 interface OpenRouterModel {
   id: string;
@@ -11,7 +12,12 @@ interface OpenRouterModel {
   context_length?: number;
 }
 
-export async function GET() {
+// 10 model list requests per minute per IP
+const RATE_LIMIT = { limit: 10, windowSeconds: 60 };
+
+export async function GET(req: NextRequest) {
+  const limited = rateLimit(req, RATE_LIMIT, "models");
+  if (limited) return limited;
   try {
     const apiKey = env.OPENROUTER_API_KEY;
     if (!apiKey) {
@@ -48,7 +54,7 @@ export async function GET() {
 
     return NextResponse.json({ models: simplified });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to fetch models";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Failed to fetch models:", err);
+    return NextResponse.json({ error: "Failed to fetch models" }, { status: 500 });
   }
 }

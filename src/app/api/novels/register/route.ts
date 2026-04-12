@@ -2,8 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { registerNovelInputSchema } from "@/modules/source/api/schemas";
 import { registerNovel } from "@/modules/catalog/application/register-novel";
 import { SyosetuApiError } from "@/modules/source/infra/syosetu-api";
+import { rateLimit } from "@/lib/rate-limit";
+
+// 5 novel registrations per minute per IP
+const RATE_LIMIT = { limit: 5, windowSeconds: 60 };
 
 export async function POST(request: NextRequest) {
+  const limited = rateLimit(request, RATE_LIMIT, "register");
+  if (limited) return limited;
   let body: unknown;
   try {
     body = await request.json();

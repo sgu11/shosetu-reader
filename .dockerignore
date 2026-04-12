@@ -4,6 +4,7 @@ node_modules
 .env
 .env.local
 .env.*.local
+.env.production
 .playwright-mcp
 screenshots
 *.md

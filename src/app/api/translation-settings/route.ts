@@ -26,10 +26,13 @@ export async function GET() {
       defaultGlobalPrompt: DEFAULT_GLOBAL_PROMPT,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to fetch translation settings";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Failed to fetch translation settings:", err);
+    return NextResponse.json({ error: "Failed to fetch translation settings" }, { status: 500 });
   }
 }
+
+const MAX_MODEL_NAME_LENGTH = 200;
+const MAX_GLOBAL_PROMPT_LENGTH = 5000;
 
 export async function PUT(req: NextRequest) {
   try {
@@ -38,6 +41,20 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
 
     const { modelName, globalPrompt } = body;
+
+    // Validate length limits
+    if (typeof modelName === "string" && modelName.length > MAX_MODEL_NAME_LENGTH) {
+      return NextResponse.json(
+        { error: `Model name too long (max ${MAX_MODEL_NAME_LENGTH} characters)` },
+        { status: 400 },
+      );
+    }
+    if (typeof globalPrompt === "string" && globalPrompt.length > MAX_GLOBAL_PROMPT_LENGTH) {
+      return NextResponse.json(
+        { error: `Global prompt too long (max ${MAX_GLOBAL_PROMPT_LENGTH} characters)` },
+        { status: 400 },
+      );
+    }
 
     const [existing] = await db
       .select({ id: translationSettings.id })
@@ -68,7 +85,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to update translation settings";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Failed to update translation settings:", err);
+    return NextResponse.json({ error: "Failed to update translation settings" }, { status: 500 });
   }
 }

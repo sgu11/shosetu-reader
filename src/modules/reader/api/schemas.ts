@@ -23,6 +23,7 @@ export const readerPayloadSchema = z.object({
       modelName: z.string().nullable(),
     })
     .nullable(),
+  configuredModel: z.string(),
   navigation: z.object({
     prevEpisodeId: z.string().uuid().nullable(),
     nextEpisodeId: z.string().uuid().nullable(),

@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, desc } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { translations } from "@/lib/db/schema";
+import { requireAdmin } from "@/lib/auth/admin-guard";
 
 export async function GET(req: NextRequest) {
+  const denied = requireAdmin(req);
+  if (denied) return denied;
+
   try {
     const db = getDb();
     const { searchParams } = req.nextUrl;
@@ -42,7 +46,7 @@ export async function GET(req: NextRequest) {
       count: rows.length,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to fetch translations";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Failed to fetch translations:", err);
+    return NextResponse.json({ error: "Failed to fetch translations" }, { status: 500 });
   }
 }

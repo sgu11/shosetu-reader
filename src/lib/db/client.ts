@@ -14,6 +14,10 @@ function createClient() {
     max: 10,
     idle_timeout: 20,
     connect_timeout: 10,
+    // Set statement timeout to 30s to prevent runaway queries from blocking the pool
+    connection: {
+      statement_timeout: 30000,
+    },
   });
 
   return drizzle(sql, { schema });

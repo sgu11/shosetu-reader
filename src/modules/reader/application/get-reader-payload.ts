@@ -1,6 +1,8 @@
-import { eq, and, lt, gt } from "drizzle-orm";
+import { eq, and, lt, gt, desc } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { episodes, novels, translations } from "@/lib/db/schema";
+import { episodes, novels, translations, translationSettings } from "@/lib/db/schema";
+import { getDefaultUserId } from "@/lib/auth/default-user";
+import { env } from "@/lib/env";
 import type { ReaderPayload } from "../api/schemas";
 
 export async function getReaderPayload(
@@ -34,7 +36,7 @@ export async function getReaderPayload(
         lt(episodes.episodeNumber, episode.episodeNumber),
       ),
     )
-    .orderBy(episodes.episodeNumber)
+    .orderBy(desc(episodes.episodeNumber))
     .limit(1);
 
   const [nextEpisode] = await db
@@ -59,8 +61,18 @@ export async function getReaderPayload(
         eq(translations.targetLanguage, "ko"),
       ),
     )
-    .orderBy(translations.createdAt)
+    .orderBy(desc(translations.createdAt))
     .limit(1);
+
+  // Get user's configured translation model
+  const userId = getDefaultUserId();
+  const [settings] = await db
+    .select({ modelName: translationSettings.modelName })
+    .from(translationSettings)
+    .where(eq(translationSettings.userId, userId))
+    .limit(1);
+
+  const configuredModel = settings?.modelName ?? env.OPENROUTER_DEFAULT_MODEL;
 
   return {
     novel: {
@@ -83,6 +95,7 @@ export async function getReaderPayload(
           modelName: translation.modelName,
         }
       : null,
+    configuredModel,
     navigation: {
       prevEpisodeId: prevEpisode?.id ?? null,
       nextEpisodeId: nextEpisode?.id ?? null,

@@ -2,9 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { users, readerPreferences } from "@/lib/db/schema";
-import { ensureDefaultUser, getDefaultUserId } from "@/lib/auth/default-user";
+import { ensureDefaultUser } from "@/lib/auth/default-user";
+import { rateLimit } from "@/lib/rate-limit";
 
-export async function GET() {
+// 30 settings reads per minute, 10 writes per minute
+const READ_LIMIT = { limit: 30, windowSeconds: 60 };
+const WRITE_LIMIT = { limit: 10, windowSeconds: 60 };
+
+export async function GET(req: NextRequest) {
+  const limited = rateLimit(req, READ_LIMIT, "settings-r");
+  if (limited) return limited;
   try {
     const userId = await ensureDefaultUser();
     const db = getDb();
@@ -24,6 +31,8 @@ export async function GET() {
         fontSize: readerPreferences.fontSize,
         lineHeight: readerPreferences.lineHeight,
         contentWidth: readerPreferences.contentWidth,
+        fontFamily: readerPreferences.fontFamily,
+        fontWeight: readerPreferences.fontWeight,
         themeOverride: readerPreferences.themeOverride,
       })
       .from(readerPreferences)
@@ -38,16 +47,21 @@ export async function GET() {
         fontSize: "medium",
         lineHeight: "1.8",
         contentWidth: "680",
+        fontFamily: "noto-serif-jp",
+        fontWeight: "normal",
         themeOverride: null,
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to fetch settings";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Failed to fetch settings:", err);
+    return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
   }
 }
 
 export async function PUT(req: NextRequest) {
+  const limited = rateLimit(req, WRITE_LIMIT, "settings-w");
+  if (limited) return limited;
+
   try {
     const userId = await ensureDefaultUser();
     const db = getDb();
@@ -68,14 +82,39 @@ export async function PUT(req: NextRequest) {
         .where(eq(users.id, userId));
     }
 
-    // Upsert reader preferences
+    // Upsert reader preferences (allowlist values to prevent CSS injection)
+    const ALLOWED_FONT_FAMILIES = new Set(["noto-serif-jp", "nanum-myeongjo", "nanum-gothic", "pretendard"]);
+    const ALLOWED_FONT_WEIGHTS = new Set(["normal", "bold"]);
+    const ALLOWED_FONT_SIZES = new Set(["small", "medium", "large"]);
+    const ALLOWED_THEME_OVERRIDES = new Set(["light", "dark"]);
+
     if (reader) {
       const readerUpdate: Record<string, string | null> = {};
-      if (reader.fontSize) readerUpdate.fontSize = String(reader.fontSize);
-      if (reader.lineHeight) readerUpdate.lineHeight = String(reader.lineHeight);
-      if (reader.contentWidth) readerUpdate.contentWidth = String(reader.contentWidth);
+      if (reader.fontSize && ALLOWED_FONT_SIZES.has(String(reader.fontSize))) {
+        readerUpdate.fontSize = String(reader.fontSize);
+      }
+      if (reader.lineHeight) {
+        const lh = parseFloat(String(reader.lineHeight));
+        if (!isNaN(lh) && lh >= 1.0 && lh <= 3.0) {
+          readerUpdate.lineHeight = String(lh);
+        }
+      }
+      if (reader.contentWidth) {
+        const cw = parseInt(String(reader.contentWidth), 10);
+        if (!isNaN(cw) && cw >= 400 && cw <= 1200) {
+          readerUpdate.contentWidth = String(cw);
+        }
+      }
+      if (reader.fontFamily && ALLOWED_FONT_FAMILIES.has(String(reader.fontFamily))) {
+        readerUpdate.fontFamily = String(reader.fontFamily);
+      }
+      if (reader.fontWeight && ALLOWED_FONT_WEIGHTS.has(String(reader.fontWeight))) {
+        readerUpdate.fontWeight = String(reader.fontWeight);
+      }
       if (reader.themeOverride !== undefined) {
-        readerUpdate.themeOverride = reader.themeOverride;
+        readerUpdate.themeOverride = reader.themeOverride === null || ALLOWED_THEME_OVERRIDES.has(String(reader.themeOverride))
+          ? reader.themeOverride
+          : null;
       }
 
       const [existing] = await db
@@ -99,7 +138,7 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to update settings";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Failed to update settings:", err);
+    return NextResponse.json({ error: "Failed to update settings" }, { status: 500 });
   }
 }

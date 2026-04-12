@@ -15,6 +15,7 @@ export interface RankingItem {
   authorName: string;
   totalEpisodes: number;
   isCompleted: boolean;
+  sourceUrl: string;
   /** null if not yet registered in our DB */
   novelId: string | null;
 }
@@ -49,6 +50,7 @@ export async function getRanking(
       authorName: meta.authorName,
       totalEpisodes: meta.totalEpisodes,
       isCompleted: meta.isCompleted,
+      sourceUrl: buildNovelUrl(meta.ncode),
       novelId: existing?.id ?? null,
     });
   }

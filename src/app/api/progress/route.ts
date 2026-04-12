@@ -17,7 +17,7 @@ export async function PUT(req: Request) {
     await updateReadingProgress(parsed.data);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to update progress";
-    return NextResponse.json({ error: message }, { status: 400 });
+    console.error("Failed to update progress:", err);
+    return NextResponse.json({ error: "Failed to update progress" }, { status: 400 });
   }
 }

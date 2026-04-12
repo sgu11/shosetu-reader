@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { novels, episodes } from "@/lib/db/schema";
+import { novels, episodes, translations } from "@/lib/db/schema";
 import type { NovelResponse, EpisodeListItem } from "../api/schemas";
 
 export async function getNovelById(
@@ -21,9 +21,11 @@ export async function getNovelById(
     sourceNcode: row.sourceNcode,
     sourceUrl: row.sourceUrl,
     titleJa: row.titleJa,
+    titleKo: row.titleKo,
     titleNormalized: row.titleNormalized,
     authorName: row.authorName,
     summaryJa: row.summaryJa,
+    summaryKo: row.summaryKo,
     isCompleted: row.isCompleted,
     totalEpisodes: row.totalEpisodes,
     lastSourceSyncAt: row.lastSourceSyncAt?.toISOString() ?? null,
@@ -36,9 +38,38 @@ export async function getEpisodesByNovelId(
 ): Promise<{ episodes: EpisodeListItem[]; totalCount: number }> {
   const db = getDb();
 
+  // Subquery: latest translation per episode (most recent by created_at)
+  const latestTranslation = db
+    .select({
+      episodeId: translations.episodeId,
+      status: translations.status,
+      modelName: translations.modelName,
+    })
+    .from(translations)
+    .where(
+      and(
+        eq(translations.targetLanguage, "ko"),
+        sql`${translations.createdAt} = (
+          SELECT MAX(t2.created_at) FROM translations t2
+          WHERE t2.episode_id = ${translations.episodeId}
+            AND t2.target_language = 'ko'
+        )`,
+      ),
+    )
+    .as("latest_tr");
+
   const rows = await db
-    .select()
+    .select({
+      id: episodes.id,
+      episodeNumber: episodes.episodeNumber,
+      titleJa: episodes.titleJa,
+      fetchStatus: episodes.fetchStatus,
+      publishedAt: episodes.publishedAt,
+      translationStatus: latestTranslation.status,
+      translationModel: latestTranslation.modelName,
+    })
     .from(episodes)
+    .leftJoin(latestTranslation, eq(episodes.id, latestTranslation.episodeId))
     .where(eq(episodes.novelId, novelId))
     .orderBy(episodes.episodeNumber);
 
@@ -47,7 +78,9 @@ export async function getEpisodesByNovelId(
     episodeNumber: row.episodeNumber,
     titleJa: row.titleJa,
     fetchStatus: row.fetchStatus,
-    hasTranslation: false, // will be enriched in Phase 5
+    hasTranslation: row.translationStatus === "available",
+    translationStatus: row.translationStatus as EpisodeListItem["translationStatus"],
+    translationModel: row.translationModel ?? null,
     publishedAt: row.publishedAt?.toISOString() ?? null,
   }));
 

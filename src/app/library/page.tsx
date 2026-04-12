@@ -37,8 +37,11 @@ export default async function LibraryPage() {
             >
               <div className="min-w-0 flex-1 space-y-1">
                 <h2 className="truncate text-sm font-medium">
-                  {item.titleJa}
+                  {locale === "ko" && item.titleKo ? item.titleKo : item.titleJa}
                 </h2>
+                {locale === "ko" && item.titleKo && (
+                  <p className="truncate text-xs text-muted/60">{item.titleJa}</p>
+                )}
                 <div className="flex items-center gap-3 text-xs text-muted">
                   {item.authorName && <span>{item.authorName}</span>}
                   {item.totalEpisodes != null && (

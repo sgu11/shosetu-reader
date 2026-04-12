@@ -5,10 +5,11 @@ const serverEnvSchema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   APP_URL: z.url().default("http://localhost:3000"),
-  DATABASE_URL: z.string().optional().default(""),
+  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   REDIS_URL: z.string().optional().default(""),
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_DEFAULT_MODEL: z.string().optional().default("google/gemini-2.5-flash-lite"),
+  ADMIN_API_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof serverEnvSchema>;
@@ -20,6 +21,7 @@ const parsedEnv = serverEnvSchema.safeParse({
   REDIS_URL: process.env.REDIS_URL,
   OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
   OPENROUTER_DEFAULT_MODEL: process.env.OPENROUTER_DEFAULT_MODEL,
+  ADMIN_API_KEY: process.env.ADMIN_API_KEY,
 });
 
 if (!parsedEnv.success) {

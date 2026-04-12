@@ -7,9 +7,11 @@ export const novelResponseSchema = z.object({
   sourceNcode: z.string(),
   sourceUrl: z.string().url(),
   titleJa: z.string(),
+  titleKo: z.string().nullable(),
   titleNormalized: z.string().nullable(),
   authorName: z.string().nullable(),
   summaryJa: z.string().nullable(),
+  summaryKo: z.string().nullable(),
   isCompleted: z.boolean().nullable(),
   totalEpisodes: z.number().int().nullable(),
   lastSourceSyncAt: z.string().datetime().nullable(),
@@ -26,6 +28,8 @@ export const episodeListItemSchema = z.object({
   titleJa: z.string().nullable(),
   fetchStatus: z.enum(["pending", "fetching", "fetched", "failed"]),
   hasTranslation: z.boolean(),
+  translationStatus: z.enum(["queued", "processing", "available", "failed"]).nullable(),
+  translationModel: z.string().nullable(),
   publishedAt: z.string().datetime().nullable(),
 });
 

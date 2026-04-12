@@ -6,6 +6,7 @@ import {
   fetchNovelMetadata,
   type SyosetuNovelMetadata,
 } from "@/modules/source/infra/syosetu-api";
+import { translateNovelMetadata } from "./translate-novel-metadata";
 
 export interface RegisterNovelResult {
   novel: {
@@ -61,6 +62,9 @@ async function upsertNovel(
       .where(eq(novels.sourceNcode, metadata.ncode))
       .returning();
 
+    // Fire-and-forget: translate title/summary if not yet translated
+    translateNovelMetadata(updated.id).catch(() => {});
+
     return {
       novel: {
         id: updated.id,
@@ -91,6 +95,9 @@ async function upsertNovel(
       lastSourceSyncAt: new Date(),
     })
     .returning();
+
+  // Fire-and-forget: translate title/summary to Korean
+  translateNovelMetadata(inserted.id).catch(() => {});
 
   return {
     novel: {

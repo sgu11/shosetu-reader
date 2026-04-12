@@ -121,6 +121,7 @@ export async function fetchRanking(
   const order = RANKING_ORDER_MAP[period];
   const url = new URL(SYOSETU_API_BASE);
   url.searchParams.set("order", order);
+  url.searchParams.set("type", "r"); // ongoing series only — exclude short stories (_t)
   url.searchParams.set("of", OUTPUT_FIELDS);
   url.searchParams.set("out", "json");
   url.searchParams.set("lim", String(Math.min(limit, 50)));

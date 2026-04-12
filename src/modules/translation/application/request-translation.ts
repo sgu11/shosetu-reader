@@ -98,7 +98,8 @@ export async function requestTranslation(
     return { translationId: existing.id, status: existing.status };
   }
 
-  // Insert queued row
+  // Insert queued row — use onConflictDoNothing to handle race conditions
+  // where two concurrent requests both pass the `existing` check above.
   const [row] = await db
     .insert(translations)
     .values({
@@ -110,7 +111,27 @@ export async function requestTranslation(
       sourceChecksum,
       status: "queued",
     })
+    .onConflictDoNothing()
     .returning({ id: translations.id });
+
+  if (!row) {
+    // Conflict: another request already inserted — fetch and return it
+    const [conflict] = await db
+      .select()
+      .from(translations)
+      .where(
+        and(
+          eq(translations.episodeId, episodeId),
+          eq(translations.targetLanguage, "ko"),
+          eq(translations.provider, provider.provider),
+          eq(translations.modelName, provider.modelName),
+          eq(translations.promptVersion, PROMPT_VERSION),
+          eq(translations.sourceChecksum, sourceChecksum),
+        ),
+      )
+      .limit(1);
+    return { translationId: conflict!.id, status: conflict!.status };
+  }
 
   // Process immediately (will be async via job queue later)
   processTranslation(row.id, episode.normalizedTextJa, provider).catch(

@@ -29,10 +29,12 @@ export async function GET(_req: NextRequest, context: RouteContext) {
       prompt: row?.prompt ?? "",
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to fetch novel prompt";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Failed to fetch novel prompt:", err);
+    return NextResponse.json({ error: "Failed to fetch novel prompt" }, { status: 500 });
   }
 }
+
+const MAX_PROMPT_LENGTH = 5000;
 
 export async function PUT(req: NextRequest, context: RouteContext) {
   try {
@@ -41,7 +43,14 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     const db = getDb();
     const body = await req.json();
 
-    const prompt = typeof body.prompt === "string" ? body.prompt : "";
+    const rawPrompt = typeof body.prompt === "string" ? body.prompt : "";
+    if (rawPrompt.length > MAX_PROMPT_LENGTH) {
+      return NextResponse.json(
+        { error: `Prompt too long (max ${MAX_PROMPT_LENGTH} characters)` },
+        { status: 400 },
+      );
+    }
+    const prompt = rawPrompt;
 
     const [existing] = await db
       .select({ id: novelTranslationPrompts.id })
@@ -69,7 +78,7 @@ export async function PUT(req: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to update novel prompt";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Failed to update novel prompt:", err);
+    return NextResponse.json({ error: "Failed to update novel prompt" }, { status: 500 });
   }
 }

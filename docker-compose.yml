@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: shosetu
       POSTGRES_DB: shosetu_reader
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -20,11 +20,13 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - .env.production
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://shosetu:shosetu@db:5432/shosetu_reader
-      APP_URL: http://localhost:3000
+      APP_URL: https://narou.oci.lidlesseye.net
     depends_on:
       db:
         condition: service_healthy

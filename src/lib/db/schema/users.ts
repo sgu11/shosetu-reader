@@ -23,6 +23,8 @@ export const readerPreferences = pgTable("reader_preferences", {
   fontSize: text("font_size").notNull().default("medium"),
   lineHeight: text("line_height").notNull().default("1.8"),
   contentWidth: text("content_width").notNull().default("680"),
+  fontFamily: text("font_family").notNull().default("noto-serif-jp"),
+  fontWeight: text("font_weight").notNull().default("normal"),
   themeOverride: themeEnum("theme_override"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

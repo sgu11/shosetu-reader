@@ -13,6 +13,7 @@ interface RankingItem {
   authorName: string;
   totalEpisodes: number;
   isCompleted: boolean;
+  sourceUrl: string;
   novelId: string | null;
 }
 
@@ -23,6 +24,8 @@ export default function RankingPage() {
   const [items, setItems] = useState<RankingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState<string | null>(null);
+  const [titleKo, setTitleKo] = useState<Record<string, string>>({});
+  const [translating, setTranslating] = useState(false);
 
   const periods: { value: Period; label: string }[] = [
     { value: "daily", label: t("ranking.daily") },
@@ -31,20 +34,48 @@ export default function RankingPage() {
     { value: "quarterly", label: t("ranking.quarterly") },
   ];
 
+  const translateTitles = useCallback(async (rankItems: RankingItem[]) => {
+    if (rankItems.length === 0) return;
+    setTranslating(true);
+    try {
+      const res = await fetch("/api/ranking/translate-titles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ titles: rankItems.map((i) => i.title) }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const map: Record<string, string> = {};
+        rankItems.forEach((item, idx) => {
+          if (data.translations[idx] && data.translations[idx] !== item.title) {
+            map[item.ncode] = data.translations[idx];
+          }
+        });
+        setTitleKo(map);
+      }
+    } catch {
+      // translation is best-effort
+    } finally {
+      setTranslating(false);
+    }
+  }, []);
+
   const fetchRanking = useCallback(async (p: Period) => {
     setLoading(true);
+    setTitleKo({});
     try {
       const res = await fetch(`/api/ranking?period=${p}&limit=20`);
       if (res.ok) {
         const data = await res.json();
         setItems(data.items);
+        translateTitles(data.items);
       }
     } catch {
       // silent
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [translateTitles]);
 
   useEffect(() => {
     fetchRanking(period);
@@ -128,15 +159,28 @@ export default function RankingPage() {
 
               {/* Info */}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">
-                  {item.title}
-                </p>
+                <a
+                  href={item.sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group"
+                >
+                  {titleKo[item.ncode] && (
+                    <p className="truncate text-sm font-medium group-hover:text-accent transition-colors">
+                      {titleKo[item.ncode]}
+                    </p>
+                  )}
+                  <p className={`truncate text-sm transition-colors ${
+                    titleKo[item.ncode]
+                      ? "text-muted group-hover:text-muted/80"
+                      : "font-medium group-hover:text-accent"
+                  }`}>
+                    {item.title}
+                  </p>
+                </a>
                 <div className="flex items-center gap-3 text-xs text-muted">
                   <span>{item.authorName}</span>
                   <span>{item.totalEpisodes} {t("ranking.eps")}</span>
-                  <span className={item.isCompleted ? "text-success" : "text-accent"}>
-                    {item.isCompleted ? t("ranking.completed") : t("ranking.ongoing")}
-                  </span>
                 </div>
               </div>
 
@@ -161,6 +205,14 @@ export default function RankingPage() {
               )}
             </div>
           ))}
+
+          {/* Translating indicator */}
+          {translating && (
+            <p className="text-center text-xs text-muted py-2">
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent mr-1.5 align-middle" />
+              {t("ranking.translatingTitles")}
+            </p>
+          )}
         </div>
       )}
     </main>
