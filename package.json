@@ -16,6 +16,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "cheerio": "^1.2.0",
     "drizzle-orm": "^0.45.2",
     "next": "16.2.3",
     "postgres": "^3.4.9",

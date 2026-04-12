@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getNovelById, getEpisodesByNovelId } from "@/modules/catalog/application/get-novel";
 import Link from "next/link";
+import { IngestButton } from "@/components/ingest-button";
 
 interface Props {
   params: Promise<{ novelId: string }>;
@@ -71,14 +72,18 @@ export default async function NovelDetailPage({ params }: Props) {
           )}
         </div>
 
-        <a
-          href={novel.sourceUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
-        >
-          View on Syosetu &rarr;
-        </a>
+        <div className="flex items-center gap-4">
+          <a
+            href={novel.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
+          >
+            View on Syosetu &rarr;
+          </a>
+        </div>
+
+        <IngestButton novelId={novelId} />
       </section>
 
       {/* Episode list */}
@@ -92,44 +97,61 @@ export default async function NovelDetailPage({ params }: Props) {
 
         {episodes.length === 0 ? (
           <div className="surface-card rounded-2xl p-7 text-center text-sm text-muted">
-            No episodes ingested yet. Episodes will appear here after the
-            ingestion pipeline runs.
+            No episodes ingested yet. Click &quot;Ingest episodes&quot; above to
+            fetch them from Syosetu.
           </div>
         ) : (
           <div className="space-y-2">
-            {episodes.map((ep) => (
-              <div
-                key={ep.id}
-                className="surface-card flex items-center justify-between rounded-xl px-5 py-3"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-muted">
-                    #{ep.episodeNumber}
-                  </span>
-                  <span className="text-sm">
-                    {ep.titleJa ?? `Episode ${ep.episodeNumber}`}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  {ep.hasTranslation && (
-                    <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">
-                      KR
+            {episodes.map((ep) => {
+              const isReadable = ep.fetchStatus === "fetched";
+              const inner = (
+                <>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-medium text-muted">
+                      #{ep.episodeNumber}
                     </span>
-                  )}
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs ${
-                      ep.fetchStatus === "fetched"
-                        ? "bg-success/10 text-success"
-                        : ep.fetchStatus === "failed"
-                          ? "bg-error/10 text-error"
-                          : "bg-surface-strong text-muted"
-                    }`}
-                  >
-                    {ep.fetchStatus}
-                  </span>
+                    <span className="text-sm">
+                      {ep.titleJa ?? `Episode ${ep.episodeNumber}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {ep.hasTranslation && (
+                      <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success">
+                        KR
+                      </span>
+                    )}
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        ep.fetchStatus === "fetched"
+                          ? "bg-success/10 text-success"
+                          : ep.fetchStatus === "failed"
+                            ? "bg-error/10 text-error"
+                            : "bg-surface-strong text-muted"
+                      }`}
+                    >
+                      {ep.fetchStatus}
+                    </span>
+                  </div>
+                </>
+              );
+
+              return isReadable ? (
+                <Link
+                  key={ep.id}
+                  href={`/reader/${ep.id}`}
+                  className="surface-card flex items-center justify-between rounded-xl px-5 py-3 cursor-pointer transition-colors hover:bg-surface-strong"
+                >
+                  {inner}
+                </Link>
+              ) : (
+                <div
+                  key={ep.id}
+                  className="surface-card flex items-center justify-between rounded-xl px-5 py-3"
+                >
+                  {inner}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
