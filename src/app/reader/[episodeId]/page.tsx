@@ -30,7 +30,9 @@ export default async function ReaderPage({ params }: Props) {
     progress,
   } = payload;
   const paragraphs = episode.sourceTextJa?.split("\n") ?? [];
-  const initialReaderLanguage = progress?.currentLanguage ?? "ja";
+  const hasAvailableTranslation = translation?.status === "available";
+  const initialReaderLanguage =
+    progress?.currentLanguage ?? (locale === "ko" && hasAvailableTranslation ? "ko" : "ja");
 
   const initialTranslation = translation
     ? {
