@@ -1,73 +1,73 @@
 # Shosetu Reader
 
-A calm web reading platform for Japanese web novels from Syosetu with Korean translation support. Built as a modular monolith with Next.js, PostgreSQL, and OpenRouter for JP→KR translation.
-
-## Stack
-
-- Next.js 16 (App Router) + TypeScript
-- Tailwind CSS 4 (dark-mode-native, Supabase-inspired design system)
-- Drizzle ORM + PostgreSQL
-- OpenRouter (OpenAI-compatible) for JP→KR translation
-- Docker for production deployment
-- Zod for validation
-- pnpm
+A web reading platform for Japanese web novels from [Syosetu](https://syosetu.com/) with JP→KR translation. Built as a modular monolith with Next.js, PostgreSQL, Redis, and OpenRouter.
 
 ## Features
 
 - **Novel registration** via Syosetu URL or ncode
-- **Episode ingestion** with batch and full-ingest modes (background job with progress)
-- **Web reader** with JA/KR toggle, per-device font/layout preferences (cookie-based), scroll restoration
-- **Korean translation** pipeline via OpenRouter with model selection, retry, re-translate, and discard
-- **Translation inventory** with per-model breakdown and novel/episode-level discard controls
+- **Episode ingestion** with batch and full-ingest background jobs
+- **Web reader** with JA/KR toggle, per-device font/layout preferences, scroll restoration
+- **Translation pipeline** via OpenRouter with model selection, retry, re-translate, discard, and session abort
+- **V3 translation engine** with structured glossary, context chaining across episodes, adaptive chunking, and quality validation
+- **Live episode updates** — translation and ingestion progress update without page reload
+- **Translation inventory** with per-model breakdown and novel/episode-level discard
 - **Multi-user profiles** with guest data migration and user-scoped settings/library/progress
-- **Personal library** with subscriptions, progress tracking, continue-reading, and status overview badges
+- **Personal library** with subscriptions, progress tracking, continue-reading, and status overview
 - **Ranking discovery** from Syosetu (daily/weekly/monthly/quarterly)
 - **Bilingual UI** (English/Korean) with cookie-based locale persistence
-- **Per-novel translation prompts** for character names, tone, etc.
-- **Model visibility** in reader with quick-switch between available translations
+- **Per-novel glossary & style guide** with auto-extraction from translated episodes
+- **Cost tracking** across all pipeline stages (translation, glossary generation, term extraction)
+- **Dark/light/system theme** with Supabase-inspired design system
 
-## Local Setup
+## Stack
 
-1. Copy `.env.example` to `.env` and fill in `DATABASE_URL` and `OPENROUTER_API_KEY`.
-2. `pnpm install`
-3. `pnpm db:generate && pnpm db:migrate` (or `npx drizzle-kit push` for dev)
-4. `pnpm dev`
+- **Framework**: Next.js 16 (App Router) + TypeScript
+- **Styling**: Tailwind CSS 4 (dark-mode-native)
+- **Database**: Drizzle ORM + PostgreSQL
+- **Queue**: Redis-backed durable job queue with dedicated worker
+- **Translation**: OpenRouter (OpenAI-compatible) for JP→KR
+- **Validation**: Zod
+- **Testing**: Vitest (56 tests)
+- **Deployment**: Docker Compose
+- **Package manager**: pnpm
 
-Health check: `http://localhost:3000/api/health`
+## Quick Start
+
+```bash
+cp .env.example .env    # fill in DATABASE_URL and OPENROUTER_API_KEY
+pnpm install
+pnpm db:migrate
+pnpm dev                # http://localhost:3000
+```
 
 ## Production (Docker)
 
 ```bash
-docker compose up -d --build
+cp .env.example .env.production   # fill in secrets
+docker compose up -d --build      # app + worker + db + redis on port 3000
 ```
 
-The app runs at port 3000 with auto-migration on startup via `docker-entrypoint.sh`.
+Migrations run automatically on container start.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start local dev server |
+| `pnpm dev` | Start dev server (Turbopack) |
 | `pnpm build` | Production build |
-| `pnpm lint` | ESLint |
-| `pnpm typecheck` | TypeScript check |
 | `pnpm check` | Lint + typecheck |
 | `pnpm test` | Run vitest |
 | `pnpm db:generate` | Generate Drizzle migrations |
 | `pnpm db:migrate` | Apply migrations |
 | `pnpm db:studio` | Open Drizzle Studio |
 
-## Repository Structure
+## Project Structure
 
-```text
+```
 src/
   app/              Next.js App Router pages and API routes
-  components/       Shared React components
-  lib/              Shared infrastructure
-    db/             Drizzle ORM schema and client
-    i18n/           EN/KR dictionaries, locale provider
-    auth/           Default user management
-    rate-limit/     API rate limiting
+  components/       React components (18)
+  lib/              Shared infrastructure (db, i18n, auth, rate-limit)
   modules/          Domain modules (modular monolith)
     source/         Syosetu API/HTML integration
     catalog/        Novel and episode domain
@@ -75,64 +75,54 @@ src/
     translation/    Translation pipeline (OpenRouter)
     reader/         Reader content assembly
     identity/       Users, sessions, preferences
-    jobs/           Background job orchestration
+    jobs/           Background job orchestration (Redis queue + worker)
     admin/          Ops visibility
+tests/              Vitest tests mirroring src/ structure
+drizzle/            SQL migration files (17 migrations)
+docs/               Architecture, design, and planning documents
 ```
 
-## API Surface (30 endpoints)
+## API (39 route files)
 
-### Discovery & Registration
-- `POST /api/novels/register`
-- `GET /api/ranking`
-- `POST /api/ranking/translate-titles`
+| Area | Endpoints |
+|------|-----------|
+| **Discovery** | `POST /api/novels/register`, `GET /api/ranking`, `POST /api/ranking/translate-titles` |
+| **Novel & Episodes** | `GET /api/novels/[id]`, `GET .../episodes`, `POST .../ingest`, `POST .../ingest-all` |
+| **Translation** | `POST .../bulk-translate`, `POST .../bulk-translate-all`, `POST .../translate-session/abort` |
+| **Per-episode** | `POST .../request`, `GET .../status`, `DELETE .../discard` |
+| **Glossary** | `GET/PUT .../glossary`, `GET/POST .../entries`, `PUT/DELETE .../entries/[id]`, `POST .../entries/import` |
+| **Library** | `GET /api/library`, `POST/DELETE .../subscribe`, `PUT /api/progress` |
+| **Identity** | `POST /api/auth/sign-in`, `POST .../sign-out`, `GET .../session`, `GET/POST /api/profiles`, `GET/PUT/DELETE .../active` |
+| **Reader & Settings** | `GET /api/reader/episodes/[id]`, `GET/PUT /api/settings`, `GET/PUT /api/translation-settings`, `GET /api/openrouter/models` |
+| **Admin** | `GET /api/health`, `GET .../jobs`, `GET .../metrics`, `GET .../scheduled`, `GET .../translations`, `.../quality`, `.../trends` |
+| **Jobs** | `GET /api/jobs/[id]`, `GET .../novels/[id]/jobs/current` |
 
-### Novel & Episodes
-- `GET /api/novels/[novelId]`
-- `GET /api/novels/[novelId]/episodes`
-- `POST /api/novels/[novelId]/ingest`
-- `POST /api/novels/[novelId]/ingest-all`
-- `GET/PUT /api/novels/[novelId]/translation-prompt`
+## Pages
 
-### Translation
-- `POST /api/novels/[novelId]/bulk-translate`
-- `POST /api/novels/[novelId]/bulk-translate-all`
-- `DELETE /api/novels/[novelId]/translations/discard`
-- `POST /api/translations/episodes/[episodeId]/request`
-- `GET /api/translations/episodes/[episodeId]/status`
-- `DELETE /api/translations/episodes/[episodeId]/discard`
-- `GET/PUT /api/translation-settings`
+| Page | Description |
+|------|-------------|
+| Home | Hero + continue reading |
+| Library | Subscribed novels with status badges |
+| Ranking | Daily/weekly/monthly/quarterly from Syosetu |
+| Register | URL or ncode input |
+| Novel detail | Episode list with live updates, glossary editor, translation inventory, actions menu |
+| Reader | JA/KR toggle, model switching, font settings, progress tracking |
+| Settings | Locale, theme, translation model, global prompt |
+| Profiles | Create, switch, guest data migration |
+| Sign-in | Authentication entry point |
 
-### Library & Progress
-- `GET /api/library`
-- `POST/DELETE /api/library/[novelId]/subscribe`
-- `PUT /api/progress`
+## Documentation
 
-### Identity & Profiles
-- `POST /api/auth/sign-in`
-- `POST /api/auth/sign-out`
-- `GET /api/auth/session`
-- `GET/POST /api/profiles`
-- `GET/PUT/DELETE /api/profiles/active`
+See [`docs/`](docs/) for architecture and design documents:
 
-### Reader & Settings
-- `GET /api/reader/episodes/[episodeId]`
-- `GET/PUT /api/settings`
-- `GET /api/openrouter/models`
+- [V1 Goal](docs/v1-goal.md) — product requirements and acceptance criteria
+- [V1 Architecture](docs/v1-architecture.md) — system design
+- [V1 Design](docs/v1-design.md) — UX and interaction patterns
+- [V1 Design Style](docs/v1-design-style.md) — Supabase-inspired visual system
+- [V2 Architecture](docs/v2-architecture.md) — multi-user, durable jobs, live updates
+- [V3 Architecture](docs/v3-architecture.md) — glossary, context chaining, quality validation
+- [Progress](docs/progress.md) — implementation status across all phases
 
-### Admin & Jobs
-- `GET /api/health`
-- `GET /api/admin/jobs`
-- `GET /api/admin/translations`
-- `GET /api/jobs/[jobId]`
+## License
 
-## Pages (9 screens + framework `_not-found`)
-
-- **Home** — hero + continue reading with scroll restoration
-- **Library** — subscribed novels with status badges (fetched/translated counts)
-- **Ranking** — daily/weekly/monthly/quarterly tabs
-- **Register** — URL or ncode input
-- **Novel detail** — episodes, subscribe, actions menu, translation inventory, per-novel prompt
-- **Reader** — JA/KR toggle, model visibility, font settings, prev/next navigation, progress tracking
-- **Settings** — locale, theme, translation model, global prompt
-- **Profiles** — create, switch, guest data migration
-- **Sign-in** — authentication entry point
+[MIT](LICENSE)
