@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { episodes, translations, novelGlossaryEntries } from "@/lib/db/schema";
 import { env } from "@/lib/env";
@@ -6,7 +6,9 @@ import { importGlossaryEntries, type GlossaryEntryInput } from "./glossary-entri
 
 const EXTRACTION_SYSTEM_PROMPT = `You are a glossary extraction assistant for Japanese-to-Korean web novel translation.
 
-Given a Japanese source text and its Korean translation, extract proper nouns, recurring terms, and notable translation choices.
+Given a Japanese source text and its Korean translation, extract only the most important terms.
+
+Extract only proper nouns (character names, place names), unique terminology (skills, magic, titles), and critical recurring terms. Do NOT extract common words, adjectives, generic descriptions, or terms that appear only once. Maximum 5 entries.
 
 Return ONLY a JSON array. Each element must have exactly these fields:
 - "term_ja": the Japanese term (kanji/kana)
@@ -14,12 +16,13 @@ Return ONLY a JSON array. Each element must have exactly these fields:
 - "reading": furigana/reading (if determinable, otherwise null)
 - "category": one of "character", "place", "term", "skill", "honorific"
 - "notes": brief context (one sentence max, or null)
+- "importance": integer 1-5 (1=minor reference, 2=supporting detail, 3=recurring term, 4=important character/concept, 5=main character/critical term)
 
 Rules:
 - Only extract terms that appear as deliberate translation choices (names, places, skills, titles)
 - Do not extract common words or grammar patterns
-- Do not duplicate terms already in the existing glossary
-- Keep the list concise — max 30 entries per episode
+- Do not duplicate terms already listed below
+- Be very selective — only the most important 5 terms per episode
 - Output ONLY the JSON array, no other text`;
 
 export interface ExtractGlossaryPayload {
@@ -53,21 +56,39 @@ export async function extractGlossaryTerms(
     return { imported: 0, skipped: 0 };
   }
 
-  // Load existing confirmed entries to avoid duplicates in the prompt
+  // Load ALL existing entries (confirmed, suggested, rejected) to provide full context
   const existingEntries = await db
-    .select({ termJa: novelGlossaryEntries.termJa })
+    .select({
+      termJa: novelGlossaryEntries.termJa,
+      status: novelGlossaryEntries.status,
+    })
     .from(novelGlossaryEntries)
-    .where(
-      and(
-        eq(novelGlossaryEntries.novelId, payload.novelId),
-        eq(novelGlossaryEntries.status, "confirmed"),
-      ),
-    );
+    .where(eq(novelGlossaryEntries.novelId, payload.novelId));
 
   const existingTerms = new Set(existingEntries.map((e) => e.termJa));
-  const existingList = existingEntries.length > 0
-    ? `\n\nAlready in glossary (do not re-extract):\n${existingEntries.map((e) => e.termJa).join(", ")}`
-    : "";
+
+  // Build context listing for each status
+  const confirmedTerms = existingEntries.filter((e) => e.status === "confirmed");
+  const suggestedTerms = existingEntries.filter((e) => e.status === "suggested");
+  const rejectedTerms = existingEntries.filter((e) => e.status === "rejected");
+
+  const contextParts: string[] = [];
+  if (confirmedTerms.length > 0) {
+    contextParts.push(
+      `\n\nConfirmed glossary entries (confirmed — do not re-extract):\n${confirmedTerms.map((e) => e.termJa).join(", ")}`,
+    );
+  }
+  if (suggestedTerms.length > 0) {
+    contextParts.push(
+      `\n\nSuggested entries (already suggested — skip):\n${suggestedTerms.map((e) => e.termJa).join(", ")}`,
+    );
+  }
+  if (rejectedTerms.length > 0) {
+    contextParts.push(
+      `\n\nRejected entries (rejected — do NOT re-suggest):\n${rejectedTerms.map((e) => e.termJa).join(", ")}`,
+    );
+  }
+  const existingList = contextParts.join("");
 
   // Truncate texts for cost control
   const sourceTruncated = episode.sourceText.slice(0, 4000);
@@ -112,6 +133,7 @@ export async function extractGlossaryTerms(
     reading?: string | null;
     category?: string;
     notes?: string | null;
+    importance?: number;
   }>;
 
   try {
@@ -132,22 +154,27 @@ export async function extractGlossaryTerms(
     }
   }
 
-  // Validate and convert entries
+  // Validate and convert entries — cap at 5 per episode, auto-register as confirmed
   const validCategories = new Set(["character", "place", "term", "skill", "honorific"]);
   const entries: GlossaryEntryInput[] = rawEntries
     .filter((e) => e.term_ja && e.term_ko && e.category && validCategories.has(e.category))
     .filter((e) => !existingTerms.has(e.term_ja!))
-    .slice(0, 30)
-    .map((e) => ({
-      termJa: e.term_ja!,
-      termKo: e.term_ko!,
-      reading: e.reading ?? undefined,
-      category: e.category as GlossaryEntryInput["category"],
-      notes: e.notes ?? undefined,
-      sourceEpisodeNumber: payload.episodeNumber,
-      status: "suggested" as const,
-      provenanceTranslationId: payload.translationId,
-    }));
+    .slice(0, 5)
+    .map((e) => {
+      const rawImportance = typeof e.importance === "number" ? e.importance : 3;
+      const importance = Math.max(1, Math.min(5, Math.round(rawImportance)));
+      return {
+        termJa: e.term_ja!,
+        termKo: e.term_ko!,
+        reading: e.reading ?? undefined,
+        category: e.category as GlossaryEntryInput["category"],
+        notes: e.notes ?? undefined,
+        sourceEpisodeNumber: payload.episodeNumber,
+        status: "confirmed" as const,
+        importance,
+        provenanceTranslationId: payload.translationId,
+      };
+    });
 
   if (entries.length === 0) return { imported: 0, skipped: 0 };
 

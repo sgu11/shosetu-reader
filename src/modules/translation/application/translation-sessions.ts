@@ -88,6 +88,9 @@ export async function createTranslationSession(
       modelName,
       glossaryVersion,
       promptFingerprint: fingerprint,
+      creatorUserId: userId,
+      expectedNextIndex: 0,
+      globalPrompt,
     })
     .returning({ id: translationSessions.id });
 
@@ -138,6 +141,14 @@ export async function advanceSession(
 
   if (!session || session.status !== "active") return;
 
+  // Ordering guard — reject out-of-order advances
+  if (payload.currentIndex !== session.expectedNextIndex) {
+    console.error(
+      `Session ${payload.sessionId}: out-of-order advance (expected ${session.expectedNextIndex}, got ${payload.currentIndex})`,
+    );
+    return;
+  }
+
   // Load episode
   const [episode] = await db
     .select()
@@ -148,6 +159,10 @@ export async function advanceSession(
   if (!episode?.normalizedTextJa) {
     // Skip episodes without source text, advance to next
     const jobQueue = getJobQueue();
+    await db
+      .update(translationSessions)
+      .set({ expectedNextIndex: payload.currentIndex + 1, updatedAt: new Date() })
+      .where(eq(translationSessions.id, payload.sessionId));
     await jobQueue.enqueue(
       "translation.session-advance",
       {
@@ -162,8 +177,8 @@ export async function advanceSession(
     return;
   }
 
-  // Load user settings for this session's model
-  const globalPrompt = await loadSessionGlobalPrompt();
+  // Use session's stored globalPrompt (captured at creation time)
+  const globalPrompt = session.globalPrompt ?? "";
 
   // Load structured glossary for prompt
   const confirmedEntries = await db
@@ -173,6 +188,7 @@ export async function advanceSession(
       reading: novelGlossaryEntries.reading,
       category: novelGlossaryEntries.category,
       notes: novelGlossaryEntries.notes,
+      importance: novelGlossaryEntries.importance,
     })
     .from(novelGlossaryEntries)
     .where(
@@ -222,6 +238,10 @@ export async function advanceSession(
   if (!translationId) {
     // Already exists — skip and advance
     const jobQueue = getJobQueue();
+    await db
+      .update(translationSessions)
+      .set({ expectedNextIndex: payload.currentIndex + 1, updatedAt: new Date() })
+      .where(eq(translationSessions.id, payload.sessionId));
     await jobQueue.enqueue(
       "translation.session-advance",
       {
@@ -257,8 +277,19 @@ export async function advanceSession(
       `Session ${payload.sessionId}: translation failed for episode ${episodeId}`,
       err,
     );
+    // Mark translation as failed
+    if (translationId) {
+      await db
+        .update(translations)
+        .set({ status: "failed", errorMessage: "Session advance failed", updatedAt: new Date() })
+        .where(eq(translations.id, translationId));
+    }
     // Continue to next episode even on failure
     const jobQueue = getJobQueue();
+    await db
+      .update(translationSessions)
+      .set({ expectedNextIndex: payload.currentIndex + 1, updatedAt: new Date() })
+      .where(eq(translationSessions.id, payload.sessionId));
     await jobQueue.enqueue(
       "translation.session-advance",
       {
@@ -291,16 +322,6 @@ export async function advanceSession(
       entityId: payload.novelId,
     },
   );
-}
-
-async function loadSessionGlobalPrompt(): Promise<string> {
-  // For sessions, use the first available user's global prompt
-  const db = getDb();
-  const [settings] = await db
-    .select({ globalPrompt: translationSettings.globalPrompt })
-    .from(translationSettings)
-    .limit(1);
-  return settings?.globalPrompt ?? "";
 }
 
 /**
@@ -425,7 +446,12 @@ Output ONLY the summary text, no headers or labels.`;
 }
 
 async function enqueueNextAdvance(payload: SessionSummaryPayload) {
+  const db = getDb();
   const jobQueue = getJobQueue();
+  await db
+    .update(translationSessions)
+    .set({ expectedNextIndex: payload.currentIndex + 1, updatedAt: new Date() })
+    .where(eq(translationSessions.id, payload.sessionId));
   await jobQueue.enqueue(
     "translation.session-advance",
     {

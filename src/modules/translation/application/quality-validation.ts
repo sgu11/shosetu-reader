@@ -13,10 +13,11 @@ export interface QualityWarning {
   severity: "info" | "warning" | "error";
 }
 
-interface ValidationInput {
+export interface ValidationInput {
   sourceText: string;
   translatedText: string;
   chunkCount: number | null;
+  confirmedTerms?: Array<{ termJa: string; termKo: string }>;
 }
 
 /**
@@ -37,28 +38,28 @@ export function validateTranslation(input: ValidationInput): QualityWarning[] {
 
   // 2. Length ratio check — Korean output is typically 0.6–1.8x the Japanese source length
   const ratio = input.translatedText.length / input.sourceText.length;
-  if (ratio < 0.3) {
+  if (ratio < 0.5) {
     warnings.push({
       code: "SUSPICIOUSLY_SHORT",
-      message: `Translation is ${Math.round(ratio * 100)}% of source length (expected ≥30%)`,
+      message: `Translation is ${Math.round(ratio * 100)}% of source length (expected ≥50%)`,
       severity: "warning",
     });
-  } else if (ratio > 2.5) {
+  } else if (ratio > 2.0) {
     warnings.push({
       code: "SUSPICIOUSLY_LONG",
-      message: `Translation is ${Math.round(ratio * 100)}% of source length (expected ≤250%)`,
+      message: `Translation is ${Math.round(ratio * 100)}% of source length (expected ≤200%)`,
       severity: "warning",
     });
   }
 
   // 3. Untranslated Japanese segments — detect large runs of hiragana/katakana/kanji
   const japaneseRuns = input.translatedText.match(
-    /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]{20,}/g,
+    /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]{10,}/g,
   );
   if (japaneseRuns && japaneseRuns.length > 0) {
     warnings.push({
       code: "UNTRANSLATED_SEGMENTS",
-      message: `Found ${japaneseRuns.length} untranslated Japanese segment(s) (≥20 chars each)`,
+      message: `Found ${japaneseRuns.length} untranslated Japanese segment(s) (≥10 chars each)`,
       severity: "warning",
     });
   }
@@ -68,16 +69,44 @@ export function validateTranslation(input: ValidationInput): QualityWarning[] {
   const translatedParagraphs = input.translatedText.split(/\n\n+/).filter(Boolean).length;
   if (sourceParagraphs > 0 && translatedParagraphs > 0) {
     const paragraphRatio = translatedParagraphs / sourceParagraphs;
-    if (paragraphRatio < 0.5 || paragraphRatio > 2.0) {
+    if (paragraphRatio < 0.7 || paragraphRatio > 1.5) {
       warnings.push({
         code: "PARAGRAPH_COUNT_MISMATCH",
         message: `Source has ${sourceParagraphs} paragraphs, translation has ${translatedParagraphs}`,
+        severity: "warning",
+      });
+    }
+  }
+
+  // 5. Truncation detection — output ends mid-sentence
+  const tail = input.translatedText.slice(-50);
+  const hasSentenceEnding = /[다요죠임음됨함.\!\?]/.test(tail);
+  if (!hasSentenceEnding && input.translatedText.length > 100) {
+    warnings.push({
+      code: "POSSIBLE_TRUNCATION",
+      message: "Translation may be truncated (no sentence-ending punctuation found near end)",
+      severity: "warning",
+    });
+  }
+
+  // 6. Glossary compliance — check confirmed terms appear in translation
+  if (input.confirmedTerms) {
+    const missed: string[] = [];
+    for (const term of input.confirmedTerms) {
+      if (input.sourceText.includes(term.termJa) && !input.translatedText.includes(term.termKo)) {
+        missed.push(term.termJa);
+      }
+    }
+    if (missed.length > 0) {
+      warnings.push({
+        code: "GLOSSARY_MISMATCH",
+        message: `${missed.length} glossary term(s) not found in translation: ${missed.slice(0, 5).join(", ")}`,
         severity: "info",
       });
     }
   }
 
-  // 5. Chunk boundary artifacts — look for repeated sentences at chunk boundaries
+  // 7. Chunk boundary artifacts — look for repeated sentences at chunk boundaries
   if (input.chunkCount && input.chunkCount > 1) {
     const lines = input.translatedText.split("\n").filter(Boolean);
     let duplicateCount = 0;

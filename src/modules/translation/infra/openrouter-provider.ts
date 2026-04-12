@@ -75,7 +75,7 @@ export class OpenRouterProvider implements TranslationProvider {
       });
       messages.push({
         role: "assistant",
-        content: "Understood. I will continue the translation seamlessly from where the previous chunk ended.",
+        content: "Understood. I will continue the translation seamlessly. I will NOT repeat the context text in my output.",
       });
     }
 
@@ -87,10 +87,10 @@ export class OpenRouterProvider implements TranslationProvider {
       content: `Translate the following Japanese text to Korean${chunkNote}:\n\n${request.sourceText}`,
     });
 
-    // Adaptive max_tokens: ~1.5x expansion ratio, ~3 chars/token for Korean
+    // Adaptive max_tokens: ~1.2x expansion ratio, ~2 chars/token for Korean
     const sourceChars = request.sourceText.length;
     const adaptiveMaxTokens = Math.min(
-      Math.max(Math.ceil((sourceChars * 1.5) / 3) + 512, 2048),
+      Math.max(Math.ceil((sourceChars * 1.2) / 2) + 400, 2048),
       16384,
     );
 

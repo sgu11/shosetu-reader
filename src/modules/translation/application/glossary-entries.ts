@@ -10,6 +10,7 @@ export interface GlossaryEntryInput {
   notes?: string;
   sourceEpisodeNumber?: number;
   status?: "confirmed" | "suggested" | "rejected";
+  importance?: number;
   confidence?: number;
   provenanceTranslationId?: string;
 }
@@ -55,6 +56,7 @@ export async function createGlossaryEntry(
       notes: input.notes ?? null,
       sourceEpisodeNumber: input.sourceEpisodeNumber ?? null,
       status: input.status ?? "suggested",
+      importance: input.importance ?? 3,
       confidence: input.confidence ?? null,
       provenanceTranslationId: input.provenanceTranslationId ?? null,
     })
@@ -95,6 +97,9 @@ export async function updateGlossaryEntry(
         sourceEpisodeNumber: updates.sourceEpisodeNumber,
       }),
       ...(updates.status !== undefined && { status: updates.status }),
+      ...(updates.importance !== undefined && {
+        importance: updates.importance,
+      }),
       ...(updates.confidence !== undefined && {
         confidence: updates.confidence,
       }),
@@ -131,6 +136,8 @@ export async function deleteGlossaryEntry(entryId: string, novelId: string) {
   return deleted != null;
 }
 
+const MAX_CONFIRMED_ENTRIES = 50;
+
 /** Bulk import entries (for extraction and manual import). Skips existing confirmed entries. */
 export async function importGlossaryEntries(
   novelId: string,
@@ -139,12 +146,14 @@ export async function importGlossaryEntries(
   const db = getDb();
   let imported = 0;
   let skipped = 0;
+  let confirmedChanged = false;
 
   for (const input of entries) {
     const [existing] = await db
       .select({
         id: novelGlossaryEntries.id,
         status: novelGlossaryEntries.status,
+        importance: novelGlossaryEntries.importance,
       })
       .from(novelGlossaryEntries)
       .where(
@@ -159,6 +168,18 @@ export async function importGlossaryEntries(
     if (existing) {
       // Don't overwrite confirmed entries with suggested ones
       if (existing.status === "confirmed") {
+        // Check if importance changed
+        const newImportance = input.importance ?? 3;
+        if (existing.importance !== newImportance) {
+          await db
+            .update(novelGlossaryEntries)
+            .set({
+              importance: newImportance,
+              updatedAt: new Date(),
+            })
+            .where(eq(novelGlossaryEntries.id, existing.id));
+          confirmedChanged = true;
+        }
         skipped++;
         continue;
       }
@@ -171,13 +192,55 @@ export async function importGlossaryEntries(
           notes: input.notes ?? null,
           sourceEpisodeNumber: input.sourceEpisodeNumber ?? null,
           status: input.status ?? "suggested",
+          importance: input.importance ?? 3,
           confidence: input.confidence ?? null,
           provenanceTranslationId: input.provenanceTranslationId ?? null,
           updatedAt: new Date(),
         })
         .where(eq(novelGlossaryEntries.id, existing.id));
+      if (input.status === "confirmed") confirmedChanged = true;
       imported++;
     } else {
+      const effectiveStatus = input.status ?? "suggested";
+
+      // Enforce 50-entry cap for confirmed entries
+      if (effectiveStatus === "confirmed") {
+        const confirmedCount = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(novelGlossaryEntries)
+          .where(
+            and(
+              eq(novelGlossaryEntries.novelId, novelId),
+              eq(novelGlossaryEntries.status, "confirmed"),
+            ),
+          );
+
+        if ((confirmedCount[0]?.count ?? 0) >= MAX_CONFIRMED_ENTRIES) {
+          // Find the lowest-importance confirmed entry (break ties by oldest updatedAt)
+          const [lowest] = await db
+            .select({ id: novelGlossaryEntries.id })
+            .from(novelGlossaryEntries)
+            .where(
+              and(
+                eq(novelGlossaryEntries.novelId, novelId),
+                eq(novelGlossaryEntries.status, "confirmed"),
+              ),
+            )
+            .orderBy(
+              asc(novelGlossaryEntries.importance),
+              asc(novelGlossaryEntries.updatedAt),
+            )
+            .limit(1);
+
+          if (lowest) {
+            await db
+              .delete(novelGlossaryEntries)
+              .where(eq(novelGlossaryEntries.id, lowest.id));
+          }
+        }
+        confirmedChanged = true;
+      }
+
       await db.insert(novelGlossaryEntries).values({
         novelId,
         termJa: input.termJa,
@@ -186,7 +249,8 @@ export async function importGlossaryEntries(
         category: input.category,
         notes: input.notes ?? null,
         sourceEpisodeNumber: input.sourceEpisodeNumber ?? null,
-        status: input.status ?? "suggested",
+        status: effectiveStatus,
+        importance: input.importance ?? 3,
         confidence: input.confidence ?? null,
         provenanceTranslationId: input.provenanceTranslationId ?? null,
       });
@@ -194,8 +258,8 @@ export async function importGlossaryEntries(
     }
   }
 
-  // Bump version if any confirmed entries were imported
-  if (entries.some((e) => e.status === "confirmed") && imported > 0) {
+  // Bump version if any confirmed entries were changed
+  if (confirmedChanged && (imported > 0 || entries.some((e) => e.status === "confirmed"))) {
     await bumpGlossaryVersion(novelId);
   }
 

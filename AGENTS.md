@@ -61,8 +61,8 @@ API routes live in `src/app/api/` (Next.js App Router) and delegate to module ap
 
 ### V3 Translation Architecture (planned — see `docs/v3-architecture.md`)
 
-- **Structured glossary**: `novel_glossary_entries` table replaces free-text-only glossary with per-term CRUD (category, status, reading). Style guide remains as free text in `novel_glossaries.glossary`.
-- **Living glossary updates**: `glossary.extract` background job auto-extracts new terms after each episode translation. Entries start as `suggested` and require user confirmation before appearing in translation prompts.
+- **Structured glossary**: `novel_glossary_entries` table with per-term CRUD (category, importance 1-5, reading). "Generate" produces both structured entries and a prose-only style guide in one LLM call. Style guide (tone/register only) remains as free text in `novel_glossaries.glossary`.
+- **Living glossary updates**: `glossary.extract` background job auto-extracts up to 5 new terms after each episode translation. Entries are auto-confirmed with LLM-assigned importance (1-5). 50-entry confirmed cap with lowest-importance eviction.
 - **Translation sessions**: `translation_sessions` table groups sequential bulk translations. Each episode carries a rolling context summary (~2000 chars) from prior episodes to maintain consistency.
 - **Prompt caching layout**: System message (stable: base rules + glossary + global prompt) → context message (per-session: rolling summary) → source message (per-episode). Maximizes prefix cache hits on Anthropic/Google models.
 - **Episode chunking**: Long episodes (>12K chars) split at paragraph boundaries with overlap context. Adaptive `max_tokens` based on source length.
@@ -91,14 +91,18 @@ API routes live in `src/app/api/` (Next.js App Router) and delegate to module ap
 Use this unless the user explicitly asks for a production deploy.
 
 - **Dev server**: `pnpm dev` (port 3000, Turbopack)
-- **Database**: PostgreSQL on localhost:5432, database `shosetu_reader`, user from `.env`
-- **Schema sync**: `pnpm drizzle-kit push` (pushes schema directly, no migration files)
+- **Database**: PostgreSQL 17 on localhost:5432, database `shosetu_reader`, local Unix user `sangeun`
 - **Env file**: `.env` (DATABASE_URL, OPENROUTER_API_KEY, etc.)
-- **Browser testing**: Chrome DevTools MCP on http://localhost:3000
+- **No Docker locally** — Docker/colima/orbstack are not installed on this Mac
+- **No sudo needed** — PostgreSQL runs via Homebrew (`brew services start postgresql@17`), no elevated permissions required for any dev operation
+- **Applying migrations locally**: Use `psql postgresql://sangeun@localhost:5432/shosetu_reader -f drizzle/<migration>.sql` directly. **Stop the dev server first** — the dev server holds connection pools that block DDL (ALTER TABLE) statements.
+- **`drizzle-kit push`** requires TTY (interactive prompts), so it may not work from non-interactive shells. Use direct psql for migrations instead.
+- **Browser testing**: Chrome DevTools MCP or Playwright MCP on http://localhost:3000
 
 ### Production (`ssh ubuntu@aries`)
 
-- **Host**: `ssh ubuntu@aries`
+- **Host**: `ssh ubuntu@aries` (no password, SSH key auth)
+- **Sudo**: available on aries (`ubuntu` user has passwordless sudo)
 - **Project path**: `~/docker/Shosetu-Reader`
 - **App URL**: https://narou.oci.lidlesseye.net
 - **Git remote**: `https://gitea.lidlesseye.net/admin/Shosetu-Reader.git` (origin)
@@ -113,12 +117,19 @@ Use this unless the user explicitly asks for a production deploy.
 - **Env file**: `.env.production` (OPENROUTER_API_KEY, OPENROUTER_DEFAULT_MODEL, ADMIN_API_KEY)
 - **DB credentials**: `shosetu:shosetu@db:5432/shosetu_reader` (set in docker-compose.yml)
 - **Migrations**: Run automatically on container start via `docker-entrypoint.sh` → `node migrate.mjs`
+- **pnpm not on PATH** over non-interactive SSH — use `npx pnpm` if needed remotely
 
 ### Environment Selection
 
 - Default to **local dev** for all work, testing, and iteration
 - Only deploy to production when the user explicitly requests it (e.g., "deploy to production", "push to aries")
 - When deploying to production, always push to origin first, then SSH and pull on aries
+
+### Available MCP Tools
+
+- **Chrome DevTools MCP** (`mcp__plugin_chrome-devtools-mcp_chrome-devtools__*`): Navigate, click, screenshot, console, network, evaluate scripts in Chrome
+- **Playwright MCP** (`mcp__plugin_playwright_playwright__*`): Browser automation, screenshots, DOM snapshots, form filling, navigation
+- Use either for visual QA on localhost:3000 after UI changes
 
 ## Commits
 

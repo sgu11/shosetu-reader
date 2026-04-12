@@ -1,31 +1,56 @@
 import { eq, and, asc, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { episodes, translations, novelGlossaries } from "@/lib/db/schema";
+import { episodes, translations, novelGlossaries, novelGlossaryEntries } from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import { importGlossaryEntries, type GlossaryEntryInput } from "./glossary-entries";
 
 const GLOSSARY_SYSTEM_PROMPT = `You are a professional translation quality reviewer specializing in Japanese-to-Korean web novel translation.
 
-Given the first episodes of a Japanese web novel alongside their Korean translations, produce a comprehensive glossary and translation guideline document.
+Given the first episodes of a Japanese web novel alongside their Korean translations, produce:
 
-Your output must include:
+1. A structured list of important glossary entries (character names, places, terms, skills, honorifics).
+2. A prose-only style guide covering tone, register, speech patterns, and translation consistency notes.
 
-1. **Character Names** — Japanese name → Korean rendering, with notes on honorifics and naming conventions used.
-2. **Place Names & Proper Nouns** — Japanese → Korean, noting any localization choices.
-3. **Recurring Terms & Jargon** — Game/magic/military terms, unique world-building vocabulary, etc.
-4. **Style & Tone Guidelines** — Speech level (격식체/비격식체), narrator voice, character-specific speech patterns.
-5. **Translation Notes** — Any consistency issues found, recommended fixes, or patterns to maintain.
+Return ONLY a JSON object with exactly two fields:
 
-Format the output in clean Korean, using markdown. Keep entries concise but complete enough for a translator to use as reference.`;
+{
+  "entries": [
+    {
+      "term_ja": "Japanese term (kanji/kana)",
+      "term_ko": "Korean rendering used in translation",
+      "reading": "furigana/reading if determinable, otherwise null",
+      "category": "character | place | term | skill | honorific",
+      "notes": "brief context (one sentence max), or null",
+      "importance": 1-5
+    }
+  ],
+  "style_guide": "Prose-only markdown string in Korean. Cover: speech levels (격식체/비격식체), narrator voice, character-specific speech patterns, tense usage, localization philosophy, consistency notes. Do NOT include any term mappings here — those belong in entries."
+}
+
+Rules for entries:
+- Extract proper nouns (character names, place names), unique terminology (skills, magic, titles), and critical recurring terms.
+- Do NOT extract common words, adjectives, or generic descriptions.
+- Importance scale: 1=minor reference, 2=supporting detail, 3=recurring term, 4=important character/concept, 5=main character/critical term.
+- Maximum 30 entries. Prioritize by importance.
+- Do not duplicate terms already listed below as existing entries.
+
+Rules for style_guide:
+- Write in Korean.
+- Focus on translation style decisions, NOT term mappings.
+- Cover: narrator voice, speech register per character, tense consistency, honorific handling, localization choices.
+- Keep concise but actionable for a translator.`;
 
 interface GlossaryResult {
   glossary: string;
   modelName: string;
   episodeCount: number;
+  entriesImported: number;
+  entriesSkipped: number;
 }
 
 /**
  * Generate a glossary from the first N translated episodes of a novel.
- * Sends paired JP source + KR translation to LLM for analysis.
+ * Produces both structured glossary entries and a prose-only style guide.
  */
 export async function generateGlossary(
   novelId: string,
@@ -59,12 +84,43 @@ export async function generateGlossary(
     throw new Error("No translated episodes available for glossary generation");
   }
 
+  // Load existing entries to provide context and avoid duplicates
+  const existingEntries = await db
+    .select({
+      termJa: novelGlossaryEntries.termJa,
+      termKo: novelGlossaryEntries.termKo,
+      status: novelGlossaryEntries.status,
+    })
+    .from(novelGlossaryEntries)
+    .where(eq(novelGlossaryEntries.novelId, novelId));
+
+  const confirmedTerms = existingEntries.filter((e) => e.status === "confirmed");
+  const suggestedTerms = existingEntries.filter((e) => e.status === "suggested");
+  const rejectedTerms = existingEntries.filter((e) => e.status === "rejected");
+
+  const contextParts: string[] = [];
+  if (confirmedTerms.length > 0) {
+    contextParts.push(
+      `\n\nConfirmed glossary entries (do not re-extract):\n${confirmedTerms.map((e) => `${e.termJa} → ${e.termKo}`).join(", ")}`,
+    );
+  }
+  if (suggestedTerms.length > 0) {
+    contextParts.push(
+      `\n\nSuggested entries (already suggested — skip):\n${suggestedTerms.map((e) => e.termJa).join(", ")}`,
+    );
+  }
+  if (rejectedTerms.length > 0) {
+    contextParts.push(
+      `\n\nRejected entries (rejected — do NOT re-suggest):\n${rejectedTerms.map((e) => e.termJa).join(", ")}`,
+    );
+  }
+  const existingList = contextParts.join("");
+
   // Build paired text samples
   const pairedText = rows.map((row) => {
     const header = `--- Episode ${row.episodeNumber}: ${row.titleJa ?? ""} ---`;
     const jp = row.sourceText ?? "";
     const kr = row.translatedText ?? "";
-    // Truncate each episode to ~3000 chars to stay within token limits
     const jpTruncated = jp.length > 3000 ? jp.slice(0, 3000) + "\n[...]" : jp;
     const krTruncated = kr.length > 3000 ? kr.slice(0, 3000) + "\n[...]" : kr;
     return `${header}\n\n[Japanese]\n${jpTruncated}\n\n[Korean Translation]\n${krTruncated}`;
@@ -91,11 +147,12 @@ export async function generateGlossary(
         { role: "system", content: GLOSSARY_SYSTEM_PROMPT },
         {
           role: "user",
-          content: `Analyze the following ${rows.length} episodes and create a glossary and translation guideline:\n\n${pairedText}`,
+          content: `Analyze the following ${rows.length} episodes and produce the glossary entries and style guide:\n\n${pairedText}${existingList}`,
         },
       ],
       temperature: 0.3,
       max_tokens: 8192,
+      response_format: { type: "json_object" },
     }),
   });
 
@@ -111,9 +168,72 @@ export async function generateGlossary(
     throw new Error("No glossary content in OpenRouter response");
   }
 
-  const glossary = content.trim();
+  // Parse JSON response
+  let rawEntries: Array<{
+    term_ja?: string;
+    term_ko?: string;
+    reading?: string | null;
+    category?: string;
+    notes?: string | null;
+    importance?: number;
+  }> = [];
+  let styleGuide = "";
 
-  // Upsert into novel_glossaries
+  try {
+    const parsed = JSON.parse(content);
+    rawEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
+    styleGuide = typeof parsed.style_guide === "string" ? parsed.style_guide.trim() : "";
+  } catch {
+    // Fallback: try to extract JSON object from the response
+    const match = content.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        const parsed = JSON.parse(match[0]);
+        rawEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
+        styleGuide = typeof parsed.style_guide === "string" ? parsed.style_guide.trim() : "";
+      } catch {
+        console.error("Failed to parse glossary generation response:", content.slice(0, 500));
+        // Fall back to storing entire content as style guide
+        styleGuide = content.trim();
+      }
+    } else {
+      // No JSON found — treat entire response as style guide (backward compat)
+      styleGuide = content.trim();
+    }
+  }
+
+  // Validate and import entries
+  const existingTermSet = new Set(existingEntries.map((e) => e.termJa));
+  const validCategories = new Set(["character", "place", "term", "skill", "honorific"]);
+
+  const entries: GlossaryEntryInput[] = rawEntries
+    .filter((e) => e.term_ja && e.term_ko && e.category && validCategories.has(e.category))
+    .filter((e) => !existingTermSet.has(e.term_ja!))
+    .slice(0, 30)
+    .map((e) => {
+      const rawImportance = typeof e.importance === "number" ? e.importance : 3;
+      const importance = Math.max(1, Math.min(5, Math.round(rawImportance)));
+      return {
+        termJa: e.term_ja!,
+        termKo: e.term_ko!,
+        reading: e.reading ?? undefined,
+        category: e.category as GlossaryEntryInput["category"],
+        notes: e.notes ?? undefined,
+        status: "confirmed" as const,
+        importance,
+      };
+    });
+
+  let entriesImported = 0;
+  let entriesSkipped = 0;
+
+  if (entries.length > 0) {
+    const result = await importGlossaryEntries(novelId, entries);
+    entriesImported = result.imported;
+    entriesSkipped = result.skipped;
+  }
+
+  // Upsert style guide into novel_glossaries
   const [existing] = await db
     .select({ id: novelGlossaries.id })
     .from(novelGlossaries)
@@ -124,7 +244,7 @@ export async function generateGlossary(
     await db
       .update(novelGlossaries)
       .set({
-        glossary,
+        glossary: styleGuide,
         modelName,
         episodeCount: rows.length,
         generatedAt: new Date(),
@@ -134,14 +254,20 @@ export async function generateGlossary(
   } else {
     await db.insert(novelGlossaries).values({
       novelId,
-      glossary,
+      glossary: styleGuide,
       modelName,
       episodeCount: rows.length,
       generatedAt: new Date(),
     });
   }
 
-  return { glossary, modelName, episodeCount: rows.length };
+  return {
+    glossary: styleGuide,
+    modelName,
+    episodeCount: rows.length,
+    entriesImported,
+    entriesSkipped,
+  };
 }
 
 /**
@@ -174,11 +300,10 @@ export async function estimateGlossaryInput(
 
   let inputChars = 0;
   for (const row of rows) {
-    // Each episode contributes min(sourceLen, 3000) + min(translatedLen, 3000) + headers
     inputChars += Math.min(row.sourceLen ?? 0, 3000) + Math.min(row.translatedLen ?? 0, 3000) + 100;
   }
-  // Add system prompt overhead (~500 chars)
-  inputChars += 500;
+  // Add system prompt overhead (~800 chars for the longer prompt)
+  inputChars += 800;
 
   return { episodeCount: rows.length, inputChars };
 }

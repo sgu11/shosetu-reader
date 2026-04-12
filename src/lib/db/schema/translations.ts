@@ -91,6 +91,9 @@ export const translationSessions = pgTable("translation_sessions", {
   lastEpisodeNumber: integer("last_episode_number"),
   episodeCount: integer("episode_count").notNull().default(0),
   totalCostUsd: real("total_cost_usd").notNull().default(0),
+  creatorUserId: uuid("creator_user_id"),
+  expectedNextIndex: integer("expected_next_index").notNull().default(0),
+  globalPrompt: text("global_prompt").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -124,6 +127,7 @@ export const novelGlossaryEntries = pgTable(
     notes: text("notes"),
     sourceEpisodeNumber: integer("source_episode_number"),
     status: glossaryEntryStatusEnum().notNull().default("suggested"),
+    importance: integer("importance").notNull().default(3),
     confidence: real("confidence"),
     provenanceTranslationId: uuid("provenance_translation_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

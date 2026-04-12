@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { episodes } from "@/lib/db/schema";
+import { episodes, translationSessions } from "@/lib/db/schema";
 import { rateLimit } from "@/lib/rate-limit";
 import { isValidUuid } from "@/lib/validation";
 import { createTranslationSession } from "@/modules/translation/application/translation-sessions";
@@ -51,6 +51,30 @@ export async function POST(
 
   if (untranslated.length === 0) {
     return NextResponse.json({ queued: 0, message: "No untranslated episodes found" });
+  }
+
+  // Prevent duplicate sessions — return existing active session if one exists
+  const [existingSession] = await db
+    .select({ id: translationSessions.id })
+    .from(translationSessions)
+    .where(
+      and(
+        eq(translationSessions.novelId, novelId),
+        eq(translationSessions.status, "active"),
+      ),
+    )
+    .limit(1);
+
+  if (existingSession) {
+    return NextResponse.json(
+      {
+        novelId,
+        total: untranslated.length,
+        sessionId: existingSession.id,
+        message: "Active session already exists — reusing it",
+      },
+      { status: 200 },
+    );
   }
 
   const total = untranslated.length;

@@ -62,6 +62,7 @@ async function loadTranslationContext(novelId: string) {
       reading: novelGlossaryEntries.reading,
       category: novelGlossaryEntries.category,
       notes: novelGlossaryEntries.notes,
+      importance: novelGlossaryEntries.importance,
     })
     .from(novelGlossaryEntries)
     .where(
@@ -322,7 +323,7 @@ export async function processQueuedTranslation(
           targetLanguage: "ko",
           previousChunkTranslation: previousTail,
           chunkLabel: `${chunk.index + 1}/${chunk.total}`,
-        }, chunk.index === 0 ? payload.contextSummary : undefined);
+        }, payload.contextSummary);
 
         translatedChunks.push(result.translatedText);
 
@@ -344,11 +345,26 @@ export async function processQueuedTranslation(
       ? await estimateCost(provider.modelName, totalInputTokens, totalOutputTokens)
       : null;
 
+    // Load confirmed glossary entries for quality validation
+    const confirmedEntries = await db
+      .select({
+        termJa: novelGlossaryEntries.termJa,
+        termKo: novelGlossaryEntries.termKo,
+      })
+      .from(novelGlossaryEntries)
+      .where(
+        and(
+          eq(novelGlossaryEntries.novelId, payload.novelId),
+          eq(novelGlossaryEntries.status, "confirmed"),
+        ),
+      );
+
     // Run quality validation checks
     const qualityWarnings = validateTranslation({
       sourceText: payload.sourceText,
       translatedText: finalTranslatedText,
       chunkCount: isChunked ? chunks.length : null,
+      confirmedTerms: confirmedEntries.length > 0 ? confirmedEntries : undefined,
     });
 
     await db

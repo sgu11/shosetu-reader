@@ -72,6 +72,8 @@ export async function POST(req: NextRequest, context: RouteContext) {
       glossary: result.glossary,
       modelName: result.modelName,
       episodeCount: result.episodeCount,
+      entriesImported: result.entriesImported,
+      entriesSkipped: result.entriesSkipped,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

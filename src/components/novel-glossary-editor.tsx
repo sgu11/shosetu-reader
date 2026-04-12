@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "@/lib/i18n/client";
+import type { TranslationKey } from "@/lib/i18n/dictionaries";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -22,6 +23,7 @@ interface GlossaryEntry {
   reading: string | null;
   category: string;
   notes: string | null;
+  importance: number;
   sourceEpisodeNumber: number | null;
   status: "confirmed" | "suggested" | "rejected";
   confidence: number | null;
@@ -42,19 +44,13 @@ interface Props {
 
 const CATEGORIES: Category[] = ["character", "place", "term", "skill", "honorific"];
 
-// i18n: category display names — needs i18n keys later
-const CATEGORY_LABELS: Record<Category, string> = {
-  character: "Character",
-  place: "Place",
-  term: "Term",
-  skill: "Skill",
-  honorific: "Honorific",
+const CATEGORY_I18N_KEYS: Record<Category, TranslationKey> = {
+  character: "glossary.character",
+  place: "glossary.place",
+  term: "glossary.term",
+  skill: "glossary.skill",
+  honorific: "glossary.honorific",
 };
-
-const FILTER_TABS: { key: FilterTab; label: string }[] = [
-  { key: "all", label: "All" }, // needs i18n
-  ...CATEGORIES.map((c) => ({ key: c as FilterTab, label: CATEGORY_LABELS[c] })),
-];
 
 function categoryColor(cat: string): string {
   switch (cat) {
@@ -73,17 +69,8 @@ function categoryColor(cat: string): string {
   }
 }
 
-function statusBadge(status: string): { className: string; label: string } {
-  switch (status) {
-    case "confirmed":
-      return { className: "bg-accent/15 text-accent", label: "Confirmed" }; // needs i18n
-    case "suggested":
-      return { className: "bg-yellow-500/15 text-yellow-400", label: "Suggested" }; // needs i18n
-    case "rejected":
-      return { className: "bg-surface-strong text-muted line-through", label: "Rejected" }; // needs i18n
-    default:
-      return { className: "bg-surface-strong text-muted", label: status };
-  }
+function importanceStars(level: number): string {
+  return "★".repeat(Math.min(level, 5)) + "☆".repeat(Math.max(0, 5 - level));
 }
 
 function formatCost(usd: number | null, locale: "en" | "ko"): string | null {
@@ -97,12 +84,27 @@ function formatCost(usd: number | null, locale: "en" | "ko"): string | null {
   return `$${usd.toFixed(2)}`;
 }
 
+const PAGE_SIZE = 30;
+
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
 
 export function NovelGlossaryEditor({ novelId }: Props) {
   const { t, locale } = useTranslation();
+
+  const categoryLabel = useCallback(
+    (cat: Category) => t(CATEGORY_I18N_KEYS[cat]),
+    [t],
+  );
+
+  const filterTabs = useMemo(
+    () => [
+      { key: "all" as FilterTab, label: t("glossary.all") },
+      ...CATEGORIES.map((c) => ({ key: c as FilterTab, label: categoryLabel(c) })),
+    ],
+    [t, categoryLabel],
+  );
 
   // Section open/close
   const [open, setOpen] = useState(false);
@@ -111,14 +113,25 @@ export function NovelGlossaryEditor({ novelId }: Props) {
   const [entries, setEntries] = useState<GlossaryEntry[]>([]);
   const [entriesLoading, setEntriesLoading] = useState(false);
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
+  const [page, setPage] = useState(0);
 
   // Add-entry form
   const [newTermJa, setNewTermJa] = useState("");
   const [newTermKo, setNewTermKo] = useState("");
-  const [newReading, setNewReading] = useState("");
   const [newCategory, setNewCategory] = useState<Category>("character");
-  const [newNotes, setNewNotes] = useState("");
   const [adding, setAdding] = useState(false);
+
+  // Inline editing
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTermJa, setEditTermJa] = useState("");
+  const [editTermKo, setEditTermKo] = useState("");
+  const [editCategory, setEditCategory] = useState<Category>("character");
+  const [editImportance, setEditImportance] = useState(3);
+  const [editSaving, setEditSaving] = useState(false);
+
+  // Toast feedback
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   /* ---------- Style guide (free-text glossary) state ---------- */
   const [glossary, setGlossary] = useState("");
@@ -145,24 +158,33 @@ export function NovelGlossaryEditor({ novelId }: Props) {
   } | null>(null);
 
   /* ---------------------------------------------------------------- */
+  /*  Toast helper                                                     */
+  /* ---------------------------------------------------------------- */
+
+  const showToast = useCallback((message: string, type: "success" | "error") => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ message, type });
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  /* ---------------------------------------------------------------- */
   /*  Data loading                                                     */
   /* ---------------------------------------------------------------- */
 
-  // Load structured entries
   const loadEntries = useCallback(async () => {
     setEntriesLoading(true);
     try {
       const res = await fetch(`/api/novels/${novelId}/glossary/entries`);
+      if (!res.ok) throw new Error("Failed to load entries");
       const data = await res.json();
       setEntries(data.entries ?? []);
     } catch {
-      // silent
+      showToast("Failed to load glossary entries", "error");
     } finally {
       setEntriesLoading(false);
     }
-  }, [novelId]);
+  }, [novelId, showToast]);
 
-  // Load style guide glossary + meta
   useEffect(() => {
     fetch(`/api/novels/${novelId}/glossary`)
       .then((res) => res.json())
@@ -177,12 +199,10 @@ export function NovelGlossaryEditor({ novelId }: Props) {
       .catch(() => {});
   }, [novelId]);
 
-  // Load entries on open
   useEffect(() => {
     if (open) loadEntries();
   }, [open, loadEntries]);
 
-  // Load cost estimate
   useEffect(() => {
     fetch(`/api/novels/${novelId}/glossary?estimate=true`)
       .then((res) => res.json())
@@ -197,7 +217,6 @@ export function NovelGlossaryEditor({ novelId }: Props) {
       .catch(() => {});
   }, [novelId]);
 
-  // Load user's default model
   useEffect(() => {
     fetch("/api/translation-settings")
       .then((res) => res.json())
@@ -209,7 +228,6 @@ export function NovelGlossaryEditor({ novelId }: Props) {
       .catch(() => {});
   }, [selectedModel]);
 
-  // Load available models
   useEffect(() => {
     fetch("/api/openrouter/models")
       .then((res) => res.json())
@@ -217,7 +235,6 @@ export function NovelGlossaryEditor({ novelId }: Props) {
       .catch(() => {});
   }, []);
 
-  // Close picker on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
@@ -247,6 +264,23 @@ export function NovelGlossaryEditor({ novelId }: Props) {
     return entries.filter((e) => e.category === filterTab);
   }, [entries, filterTab]);
 
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages - 1);
+  const pagedEntries = filteredEntries.slice(
+    currentPage * PAGE_SIZE,
+    (currentPage + 1) * PAGE_SIZE,
+  );
+
+  // Per-category counts
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: entries.length };
+    for (const e of entries) {
+      counts[e.category] = (counts[e.category] ?? 0) + 1;
+    }
+    return counts;
+  }, [entries]);
+
   const estimatedCost = useMemo(() => {
     if (!estimate || estimate.episodeCount === 0 || !selectedModel) return null;
     const model = models.find((m) => m.id === selectedModel);
@@ -260,6 +294,11 @@ export function NovelGlossaryEditor({ novelId }: Props) {
     const outputTokens = 2000;
     return inputTokens * promptPricePerToken + outputTokens * completionPricePerToken;
   }, [estimate, selectedModel, models]);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setPage(0);
+  }, [filterTab]);
 
   /* ---------------------------------------------------------------- */
   /*  Actions                                                          */
@@ -276,44 +315,60 @@ export function NovelGlossaryEditor({ novelId }: Props) {
           termJa: newTermJa.trim(),
           termKo: newTermKo.trim(),
           category: newCategory,
-          reading: newReading.trim() || undefined,
-          notes: newNotes.trim() || undefined,
           status: "confirmed",
+          importance: 3,
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        setEntries((prev) => [data.entry, ...prev]);
-        setNewTermJa("");
-        setNewTermKo("");
-        setNewReading("");
-        setNewNotes("");
-      }
+      if (!res.ok) throw new Error("Failed to add entry");
+      const data = await res.json();
+      setEntries((prev) => [data.entry, ...prev]);
+      setNewTermJa("");
+      setNewTermKo("");
+      showToast(t("glossary.entryAdded"), "success");
     } catch {
-      // silent
+      showToast(t("glossary.entryAddFailed"), "error");
     } finally {
       setAdding(false);
     }
-  }, [novelId, newTermJa, newTermKo, newReading, newCategory, newNotes]);
+  }, [novelId, newTermJa, newTermKo, newCategory, showToast, t]);
 
-  const updateEntryStatus = useCallback(
-    async (entryId: string, status: "confirmed" | "rejected") => {
-      try {
-        const res = await fetch(`/api/novels/${novelId}/glossary/entries/${entryId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setEntries((prev) => prev.map((e) => (e.id === entryId ? data.entry : e)));
-        }
-      } catch {
-        // silent
-      }
-    },
-    [novelId],
-  );
+  const startEdit = useCallback((entry: GlossaryEntry) => {
+    setEditingId(entry.id);
+    setEditTermJa(entry.termJa);
+    setEditTermKo(entry.termKo);
+    setEditCategory(entry.category as Category);
+    setEditImportance(entry.importance ?? 3);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setEditingId(null);
+  }, []);
+
+  const saveEdit = useCallback(async () => {
+    if (!editingId || !editTermJa.trim() || !editTermKo.trim()) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch(`/api/novels/${novelId}/glossary/entries/${editingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          termJa: editTermJa.trim(),
+          termKo: editTermKo.trim(),
+          category: editCategory,
+          importance: editImportance,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update entry");
+      const data = await res.json();
+      setEntries((prev) => prev.map((e) => (e.id === editingId ? data.entry : e)));
+      setEditingId(null);
+      showToast(t("glossary.entryUpdated"), "success");
+    } catch {
+      showToast(t("glossary.entryUpdateFailed"), "error");
+    } finally {
+      setEditSaving(false);
+    }
+  }, [novelId, editingId, editTermJa, editTermKo, editCategory, editImportance, showToast, t]);
 
   const deleteEntry = useCallback(
     async (entryId: string) => {
@@ -321,33 +376,35 @@ export function NovelGlossaryEditor({ novelId }: Props) {
         const res = await fetch(`/api/novels/${novelId}/glossary/entries/${entryId}`, {
           method: "DELETE",
         });
-        if (res.ok) {
-          setEntries((prev) => prev.filter((e) => e.id !== entryId));
-        }
+        if (!res.ok) throw new Error("Failed to delete");
+        setEntries((prev) => prev.filter((e) => e.id !== entryId));
+        if (editingId === entryId) setEditingId(null);
+        showToast(t("glossary.entryDeleted"), "success");
       } catch {
-        // silent
+        showToast(t("glossary.entryDeleteFailed"), "error");
       }
     },
-    [novelId],
+    [novelId, editingId, showToast, t],
   );
 
   const saveStyleGuide = useCallback(async () => {
     setSaving(true);
     setSaved(false);
     try {
-      await fetch(`/api/novels/${novelId}/glossary`, {
+      const res = await fetch(`/api/novels/${novelId}/glossary`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ glossary }),
       });
+      if (!res.ok) throw new Error("Save failed");
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
-      // silent
+      showToast(t("glossary.saveFailed"), "error");
     } finally {
       setSaving(false);
     }
-  }, [novelId, glossary]);
+  }, [novelId, glossary, showToast, t]);
 
   const generateGlossary = useCallback(async () => {
     setGenerating(true);
@@ -359,7 +416,7 @@ export function NovelGlossaryEditor({ novelId }: Props) {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error ?? "Generation failed");
+        showToast(data.error ?? t("glossary.generateFailed"), "error");
         return;
       }
       setGlossary(data.glossary ?? "");
@@ -368,12 +425,21 @@ export function NovelGlossaryEditor({ novelId }: Props) {
         episodeCount: data.episodeCount ?? null,
         generatedAt: new Date().toISOString(),
       });
+      // Refresh entries table with newly imported entries
+      loadEntries();
+      const imported = data.entriesImported ?? 0;
+      showToast(
+        imported > 0
+          ? t("glossary.generatedWithEntries", { count: imported })
+          : t("glossary.generated"),
+        "success",
+      );
     } catch {
-      alert("Network error");
+      showToast(t("glossary.networkError"), "error");
     } finally {
       setGenerating(false);
     }
-  }, [novelId, selectedModel]);
+  }, [novelId, selectedModel, showToast, loadEntries, t]);
 
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */
@@ -381,6 +447,19 @@ export function NovelGlossaryEditor({ novelId }: Props) {
 
   return (
     <section className="surface-card space-y-3 rounded-xl p-6">
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed right-4 top-4 z-50 rounded-lg px-4 py-2 text-sm shadow-lg transition-all ${
+            toast.type === "error"
+              ? "bg-red-500/90 text-white"
+              : "bg-accent/90 text-accent-contrast"
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
+
       {/* Collapsible header */}
       <button
         type="button"
@@ -401,8 +480,7 @@ export function NovelGlossaryEditor({ novelId }: Props) {
           {/* ============================================================ */}
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-foreground">
-              {/* needs i18n: "Glossary entries" */}
-              Glossary entries
+              {t("glossary.entries")}
               {!entriesLoading && (
                 <span className="ml-2 text-xs font-normal text-muted">
                   ({filteredEntries.length})
@@ -410,93 +488,51 @@ export function NovelGlossaryEditor({ novelId }: Props) {
               )}
             </h3>
 
-            {/* Add entry form */}
+            {/* Add entry form — compact: JP, KO, Category, Add */}
             <div className="rounded-lg border border-border bg-surface p-3">
-              <div className="grid grid-cols-[1fr_1fr_auto] gap-2 sm:grid-cols-[1fr_1fr_0.7fr_auto_1.2fr_auto] sm:items-end">
+              <div className="flex items-end gap-2">
                 <input
                   type="text"
                   value={newTermJa}
                   onChange={(e) => setNewTermJa(e.target.value)}
-                  placeholder="原語 (JP)" // needs i18n
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted/50 focus:border-border-strong focus:outline-none"
+                  placeholder="JP"
+                  className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted/50 focus:border-border-strong focus:outline-none"
+                  onKeyDown={(e) => e.key === "Enter" && addEntry()}
                 />
                 <input
                   type="text"
                   value={newTermKo}
                   onChange={(e) => setNewTermKo(e.target.value)}
-                  placeholder="번역 (KO)" // needs i18n
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted/50 focus:border-border-strong focus:outline-none"
-                />
-                <input
-                  type="text"
-                  value={newReading}
-                  onChange={(e) => setNewReading(e.target.value)}
-                  placeholder="読み" // needs i18n
-                  className="hidden rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted/50 focus:border-border-strong focus:outline-none sm:block"
+                  placeholder="KO"
+                  className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted/50 focus:border-border-strong focus:outline-none"
+                  onKeyDown={(e) => e.key === "Enter" && addEntry()}
                 />
                 <select
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value as Category)}
-                  title="Category" // needs i18n
-                  className="hidden rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-border-strong focus:outline-none sm:block"
+                  title="Category"
+                  className="rounded-md border border-border bg-background px-2 py-2 text-xs text-foreground focus:border-border-strong focus:outline-none"
                 >
                   {CATEGORIES.map((c) => (
                     <option key={c} value={c}>
-                      {CATEGORY_LABELS[c]}
+                      {categoryLabel(c)}
                     </option>
                   ))}
                 </select>
-                <input
-                  type="text"
-                  value={newNotes}
-                  onChange={(e) => setNewNotes(e.target.value)}
-                  placeholder="Notes" // needs i18n
-                  className="hidden rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted/50 focus:border-border-strong focus:outline-none sm:block"
-                />
                 <button
                   type="button"
                   onClick={addEntry}
                   disabled={adding || !newTermJa.trim() || !newTermKo.trim()}
                   className="btn-pill btn-accent whitespace-nowrap px-4 py-2 text-xs"
                 >
-                  {/* needs i18n: "Add" */}
-                  {adding ? "..." : "Add"}
+                  {adding ? "..." : "+"}
                 </button>
-              </div>
-              {/* Mobile-only: category + reading row */}
-              <div className="mt-2 grid grid-cols-[auto_1fr_1fr] gap-2 sm:hidden">
-                <select
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value as Category)}
-                  title="Category" // needs i18n
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-border-strong focus:outline-none"
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {CATEGORY_LABELS[c]}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="text"
-                  value={newReading}
-                  onChange={(e) => setNewReading(e.target.value)}
-                  placeholder="読み"
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted/50 focus:border-border-strong focus:outline-none"
-                />
-                <input
-                  type="text"
-                  value={newNotes}
-                  onChange={(e) => setNewNotes(e.target.value)}
-                  placeholder="Notes"
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted/50 focus:border-border-strong focus:outline-none"
-                />
               </div>
             </div>
 
-            {/* Category filter tabs */}
+            {/* Category filter tabs with counts */}
             <div className="flex flex-wrap gap-1">
-              {FILTER_TABS.map((tab) => (
+              {filterTabs.map((tab) => (
                 <button
                   key={tab.key}
                   type="button"
@@ -508,123 +544,193 @@ export function NovelGlossaryEditor({ novelId }: Props) {
                   }`}
                 >
                   {tab.label}
+                  <span className="ml-1 opacity-60">
+                    {categoryCounts[tab.key] ?? 0}
+                  </span>
                 </button>
               ))}
             </div>
 
-            {/* Entries table */}
+            {/* Entries table — columns: Category | JP | KO | Imp | Actions */}
             {entriesLoading ? (
-              <p className="py-4 text-center text-xs text-muted">Loading...</p>
+              <p className="py-4 text-center text-xs text-muted">{t("glossary.loading")}</p>
             ) : filteredEntries.length === 0 ? (
               <p className="py-4 text-center text-xs text-muted">
-                {/* needs i18n: "No entries yet" */}
-                No entries yet
+                {t("glossary.noEntries")}
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <>
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border text-left text-xs text-muted">
-                      <th className="pb-2 pr-3 font-medium">
-                        {/* needs i18n */}
-                        Category
+                      <th className="w-20 pb-2 pr-2 font-medium">Cat</th>
+                      <th className="pb-2 pr-2 font-medium">JP</th>
+                      <th className="pb-2 pr-2 font-medium">KO</th>
+                      <th className="hidden w-16 pb-2 pr-2 text-center font-medium sm:table-cell">
+                        {t("glossary.importance")}
                       </th>
-                      <th className="pb-2 pr-3 font-medium">JP</th>
-                      <th className="pb-2 pr-3 font-medium">KO</th>
-                      <th className="hidden pb-2 pr-3 font-medium sm:table-cell">
-                        {/* needs i18n */}
-                        Reading
-                      </th>
-                      <th className="hidden pb-2 pr-3 font-medium md:table-cell">
-                        {/* needs i18n */}
-                        Notes
-                      </th>
-                      <th className="pb-2 pr-3 font-medium">
-                        {/* needs i18n */}
-                        Status
-                      </th>
-                      <th className="pb-2 font-medium">
+                      <th className="w-20 pb-2 font-medium">
                         <span className="sr-only">Actions</span>
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredEntries.map((entry) => {
-                      const badge = statusBadge(entry.status);
-                      return (
+                    {pagedEntries.map((entry) =>
+                      editingId === entry.id ? (
+                        /* ---- Inline edit row ---- */
                         <tr
                           key={entry.id}
-                          className="border-b border-border/50 last:border-0"
+                          className="border-b border-accent/20 bg-accent/5"
                         >
-                          {/* Category badge */}
-                          <td className="py-2 pr-3">
-                            <span
-                              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${categoryColor(entry.category)}`}
+                          <td className="py-2 pr-2">
+                            <select
+                              value={editCategory}
+                              onChange={(e) =>
+                                setEditCategory(e.target.value as Category)
+                              }
+                              title="Category"
+                              className="w-full rounded border border-border bg-background px-1 py-1 text-xs focus:outline-none"
                             >
-                              {CATEGORY_LABELS[entry.category as Category] ?? entry.category}
-                            </span>
+                              {CATEGORIES.map((c) => (
+                                <option key={c} value={c}>
+                                  {categoryLabel(c)}
+                                </option>
+                              ))}
+                            </select>
                           </td>
-                          {/* JP term */}
-                          <td className="py-2 pr-3 font-medium text-foreground">
-                            {entry.termJa}
+                          <td className="py-2 pr-2">
+                            <input
+                              type="text"
+                              value={editTermJa}
+                              onChange={(e) => setEditTermJa(e.target.value)}
+                              className="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none"
+                            />
                           </td>
-                          {/* KO term */}
-                          <td className="py-2 pr-3 text-foreground">{entry.termKo}</td>
-                          {/* Reading */}
-                          <td className="hidden py-2 pr-3 text-muted sm:table-cell">
-                            {entry.reading || "—"}
+                          <td className="py-2 pr-2">
+                            <input
+                              type="text"
+                              value={editTermKo}
+                              onChange={(e) => setEditTermKo(e.target.value)}
+                              className="w-full rounded border border-border bg-background px-2 py-1 text-sm focus:outline-none"
+                              onKeyDown={(e) => e.key === "Enter" && saveEdit()}
+                            />
                           </td>
-                          {/* Notes */}
-                          <td className="hidden py-2 pr-3 text-xs text-muted md:table-cell">
-                            {entry.notes || "—"}
-                          </td>
-                          {/* Status */}
-                          <td className="py-2 pr-3">
-                            <span
-                              className={`inline-block rounded-full px-2 py-0.5 text-xs ${badge.className}`}
+                          <td className="hidden py-2 pr-2 text-center sm:table-cell">
+                            <select
+                              value={editImportance}
+                              onChange={(e) =>
+                                setEditImportance(Number(e.target.value))
+                              }
+                              title="Importance"
+                              className="w-full rounded border border-border bg-background px-1 py-1 text-xs text-center focus:outline-none"
                             >
-                              {badge.label}
-                            </span>
+                              {[1, 2, 3, 4, 5].map((n) => (
+                                <option key={n} value={n}>
+                                  {n}
+                                </option>
+                              ))}
+                            </select>
                           </td>
-                          {/* Actions */}
                           <td className="py-2">
                             <div className="flex items-center gap-1">
-                              {entry.status === "suggested" && (
-                                <>
-                                  <button
-                                    type="button"
-                                    onClick={() => updateEntryStatus(entry.id, "confirmed")}
-                                    className="rounded px-2 py-1 text-xs text-accent hover:bg-accent/10 transition-colors"
-                                    title="Confirm" // needs i18n
-                                  >
-                                    ✓
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => updateEntryStatus(entry.id, "rejected")}
-                                    className="rounded px-2 py-1 text-xs text-muted hover:bg-surface-strong transition-colors"
-                                    title="Reject" // needs i18n
-                                  >
-                                    ✗
-                                  </button>
-                                </>
-                              )}
                               <button
                                 type="button"
-                                onClick={() => deleteEntry(entry.id)}
-                                className="rounded px-2 py-1 text-xs text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                                title="Delete" // needs i18n
+                                onClick={saveEdit}
+                                disabled={editSaving}
+                                className="rounded px-2 py-1 text-xs text-accent hover:bg-accent/10 transition-colors"
+                                aria-label="Save"
                               >
-                                ×
+                                {editSaving ? "..." : t("glossary.save")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEdit}
+                                className="rounded px-2 py-1 text-xs text-muted hover:bg-surface-strong transition-colors"
+                                aria-label="Cancel"
+                              >
+                                {t("glossary.cancel")}
                               </button>
                             </div>
                           </td>
                         </tr>
-                      );
-                    })}
+                      ) : (
+                        /* ---- Display row ---- */
+                        <tr
+                          key={entry.id}
+                          className="border-b border-border/50 last:border-0 hover:bg-surface-strong/30 cursor-pointer"
+                          onClick={() => startEdit(entry)}
+                        >
+                          <td className="py-2 pr-2">
+                            <span
+                              className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${categoryColor(entry.category)}`}
+                            >
+                              {CATEGORY_I18N_KEYS[entry.category as Category]
+                                ? categoryLabel(entry.category as Category)
+                                : entry.category}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap py-2 pr-2 font-medium text-foreground">
+                            {entry.termJa}
+                          </td>
+                          <td className="whitespace-nowrap py-2 pr-2 text-foreground">
+                            {entry.termKo}
+                          </td>
+                          <td className="hidden py-2 pr-2 text-center text-xs text-muted/60 sm:table-cell">
+                            {importanceStars(entry.importance)}
+                          </td>
+                          <td className="py-2">
+                            <div
+                              className="flex items-center gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => deleteEntry(entry.id)}
+                                className="rounded px-2 py-1 text-xs text-muted hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                aria-label="Delete"
+                              >
+                                &times;
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ),
+                    )}
                   </tbody>
                 </table>
-              </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-2 text-xs text-muted">
+                    <span>
+                      {currentPage * PAGE_SIZE + 1}&ndash;
+                      {Math.min((currentPage + 1) * PAGE_SIZE, filteredEntries.length)}
+                      {" of "}
+                      {filteredEntries.length}
+                    </span>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setPage((p) => Math.max(0, p - 1))}
+                        disabled={currentPage === 0}
+                        className="rounded px-2 py-1 hover:bg-surface-strong disabled:opacity-30 transition-colors"
+                      >
+                        &larr;
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPage((p) => Math.min(totalPages - 1, p + 1))
+                        }
+                        disabled={currentPage >= totalPages - 1}
+                        className="rounded px-2 py-1 hover:bg-surface-strong disabled:opacity-30 transition-colors"
+                      >
+                        &rarr;
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -636,8 +742,7 @@ export function NovelGlossaryEditor({ novelId }: Props) {
           {/* ============================================================ */}
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-foreground">
-              {/* needs i18n: "Style guide" */}
-              Style guide
+              {t("glossary.styleGuide")}
             </h3>
 
             {meta.generatedAt && (
@@ -655,7 +760,7 @@ export function NovelGlossaryEditor({ novelId }: Props) {
             <textarea
               value={glossary}
               onChange={(e) => setGlossary(e.target.value)}
-              rows={10}
+              rows={8}
               className="w-full rounded-md border border-border bg-background px-4 py-3 text-sm leading-relaxed text-foreground placeholder:text-muted/50 focus:border-border-strong focus:outline-none"
               placeholder={t("glossary.placeholder")}
             />
@@ -675,7 +780,7 @@ export function NovelGlossaryEditor({ novelId }: Props) {
                 </div>
 
                 {modelPickerOpen && (
-                  <div className="absolute left-0 top-full z-20 mt-1 w-80 rounded-lg border border-border bg-surface p-2 shadow-lg">
+                  <div className="absolute left-0 top-full z-20 mt-1 w-72 max-w-[calc(100vw-3rem)] rounded-lg border border-border bg-surface p-2 shadow-lg">
                     <input
                       type="text"
                       value={modelSearch}
