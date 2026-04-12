@@ -1,18 +1,18 @@
 import type { Metadata } from "next";
-import { Noto_Sans_KR, Noto_Serif_JP } from "next/font/google";
+import { Source_Code_Pro, Noto_Serif_JP } from "next/font/google";
 import { Nav } from "@/components/nav";
 import "./globals.css";
 
-const uiFont = Noto_Sans_KR({
-  variable: "--font-ui",
+const codeFont = Source_Code_Pro({
+  variable: "--font-code",
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
+  weight: ["400"],
 });
 
 const readerFont = Noto_Serif_JP({
   variable: "--font-reader",
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
@@ -28,8 +28,16 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${uiFont.variable} ${readerFont.variable} h-full antialiased`}
+      className={`${codeFont.variable} ${readerFont.variable} h-full antialiased`}
     >
+      <head>
+        <link
+          rel="stylesheet"
+          as="style"
+          crossOrigin="anonymous"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-jp.min.css"
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         <Nav />
         {children}

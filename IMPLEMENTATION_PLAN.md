@@ -91,6 +91,19 @@ Deliverable:
 Deliverable:
 - source episodes are readable in a stable web reader
 
+### Phase 3.5. Design System Integration
+- adopt dark-mode-native design tokens from DESIGN_STYLE.md (Supabase-inspired)
+- replace warm cream/brown palette with near-black backgrounds and emerald green accents
+- switch UI font to Inter (geometric sans-serif as Circular substitute)
+- add Source Code Pro for monospace technical labels
+- implement border-defined depth hierarchy (no shadows)
+- use pill buttons (9999px radius) for primary CTAs
+- apply weight 400 as default, 500 only for interactive elements
+- refactor all existing pages and components to match design system
+
+Deliverable:
+- consistent dark-mode-native UI across all screens following DESIGN_STYLE.md
+
 ### Phase 4. Library and Progress
 - implement subscribe and unsubscribe endpoints
 - build library query and continue-reading logic
@@ -159,6 +172,7 @@ Deliverable:
 1. foundation and schema
 2. registration and metadata sync
 3. episode ingestion and reader payload
+3.5. design system integration (dark-mode-native, Supabase-inspired)
 4. library and progress
 5. translation pipeline
 6. ranking discovery

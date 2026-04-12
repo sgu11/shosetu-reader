@@ -41,9 +41,10 @@ export function IngestButton({ novelId }: Props) {
   return (
     <div className="space-y-2">
       <button
+        type="button"
         onClick={handleIngest}
         disabled={loading}
-        className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-contrast transition-opacity disabled:opacity-50"
+        className="btn-pill btn-accent"
       >
         {loading ? "Ingesting..." : "Ingest episodes"}
       </button>
