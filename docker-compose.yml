@@ -11,7 +11,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U shosetu"]
+      test: ["CMD-SHELL", "pg_isready -U shosetu -d shosetu_reader"]
       interval: 5s
       timeout: 5s
       retries: 5
