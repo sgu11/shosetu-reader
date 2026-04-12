@@ -352,39 +352,9 @@ export function TranslationToggle({
           </button>
         </div>
 
-        {!hasTranslation && !isTranslating && !isRateLimited && (
-          <button
-            type="button"
-            onClick={() => requestTranslation()}
-            disabled={requesting}
-            className="inline-flex items-center gap-1.5 rounded-full border border-accent/30 bg-accent/5 px-3 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
-          >
-            {isFailed ? t("translation.failedRetry") : t("translation.translate")}
-            <span className="text-accent/60">{shortModel}</span>
-          </button>
-        )}
-
         {isRateLimited && (
-          <div className="flex items-center gap-1.5">
-            <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/5 px-3 py-1 text-xs font-medium text-warning">
-              {t("translation.rateLimited")}
-            </span>
-            <button
-              type="button"
-              onClick={() => requestTranslation()}
-              disabled={requesting}
-              className="rounded-full border border-border px-2.5 py-1 text-xs text-muted transition-colors hover:bg-surface-strong hover:text-foreground disabled:opacity-50"
-            >
-              {t("translation.failedRetry")}
-            </button>
-          </div>
-        )}
-
-        {isTranslating && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-muted">
-            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-            {t("translation.translating")}
-            <span className="text-muted/60">{pendingShortModel ?? shortModel}</span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/5 px-3 py-1 text-xs font-medium text-warning">
+            {t("translation.rateLimited")}
           </span>
         )}
 
@@ -392,18 +362,56 @@ export function TranslationToggle({
           <button
             type="button"
             onClick={() => setModelMenuOpen(!modelMenuOpen)}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs text-muted transition-colors hover:bg-surface-strong hover:text-foreground"
+            disabled={requesting}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs transition-colors disabled:opacity-50 ${
+              !hasTranslation && !isTranslating
+                ? "border border-accent/30 bg-accent/5 font-medium text-accent hover:bg-accent/10"
+                : "border border-border text-muted hover:bg-surface-strong hover:text-foreground"
+            }`}
             title={displayModel}
           >
-            <span className="text-muted/70">{t("translation.model")}</span>
-            <span>{shortModel}</span>
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            {isTranslating ? (
+              <>
+                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+                <span>{t("translation.translating")}</span>
+                <span className="text-muted/60">{pendingShortModel ?? shortModel}</span>
+              </>
+            ) : (
+              <>
+                <span className={!hasTranslation ? "text-accent/70" : "text-muted/70"}>
+                  {!hasTranslation
+                    ? (isFailed ? t("translation.failedRetry") : t("translation.translate"))
+                    : t("translation.model")}
+                </span>
+                <span>{shortModel}</span>
+              </>
+            )}
+            <svg className={`h-3 w-3 transition-transform ${modelMenuOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
           </button>
 
           {modelMenuOpen && (
             <div className="absolute right-0 top-full z-20 mt-1 w-64 space-y-1 rounded-lg border border-border bg-surface p-1.5">
+              {!hasTranslation && !isTranslating && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModelMenuOpen(false);
+                      requestTranslation(configuredModel);
+                    }}
+                    disabled={requesting}
+                    className="flex w-full items-center gap-1.5 rounded-md bg-accent/10 px-3 py-2 text-left text-xs font-medium text-accent transition-colors hover:bg-accent/15 disabled:opacity-50"
+                    title={configuredModel}
+                  >
+                    {isFailed ? t("translation.failedRetry") : t("translation.translate")}
+                    <span className="text-accent/60">{configuredShortModel}</span>
+                  </button>
+                  <div className="border-t border-border" />
+                </>
+              )}
+
               <div className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted">
                 <div>{t("translation.currentModel")}</div>
                 <div className="mt-1 truncate text-foreground" title={displayModel}>
@@ -460,7 +468,7 @@ export function TranslationToggle({
 
               <div className="border-t border-border" />
 
-              {(!translation.modelName || translation.modelName !== configuredModel || otherModels.length === 0) && (
+              {hasTranslation && (!translation.modelName || translation.modelName !== configuredModel || otherModels.length === 0) && (
                 <button
                   type="button"
                   onClick={() => {
@@ -471,7 +479,7 @@ export function TranslationToggle({
                   className="flex w-full items-center gap-1.5 rounded-md px-3 py-2 text-left text-xs text-accent transition-colors hover:bg-surface-strong disabled:opacity-50"
                   title={configuredModel}
                 >
-                  {hasTranslation ? t("translation.retranslate") : t("translation.translate")}
+                  {t("translation.retranslate")}
                   <span className="text-accent/60">{configuredShortModel}</span>
                 </button>
               )}
