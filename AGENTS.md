@@ -74,6 +74,42 @@ API routes live in `src/app/api/` (Next.js App Router) and delegate to module ap
 - Name test files `*.test.ts` or `*.test.tsx`
 - Test domain logic and validation schemas; don't test framework wiring
 
+## Environments
+
+### Local Development (default)
+
+Use this unless the user explicitly asks for a production deploy.
+
+- **Dev server**: `pnpm dev` (port 3000, Turbopack)
+- **Database**: PostgreSQL on localhost:5432, database `shosetu_reader`, user from `.env`
+- **Schema sync**: `pnpm drizzle-kit push` (pushes schema directly, no migration files)
+- **Env file**: `.env` (DATABASE_URL, OPENROUTER_API_KEY, etc.)
+- **Browser testing**: Chrome DevTools MCP on http://localhost:3000
+
+### Production (`ssh ubuntu@aries`)
+
+- **Host**: `ssh ubuntu@aries`
+- **Project path**: `~/docker/Shosetu-Reader`
+- **App URL**: https://narou.oci.lidlesseye.net
+- **Git remote**: `https://gitea.lidlesseye.net/admin/Shosetu-Reader.git` (origin)
+- **Deploy steps**:
+  ```bash
+  ssh ubuntu@aries
+  cd ~/docker/Shosetu-Reader
+  git fetch origin && git reset --hard origin/<branch>
+  docker compose up -d --build
+  ```
+- **Stack**: Docker Compose with `app` (Next.js standalone) + `db` (postgres:16-alpine)
+- **Env file**: `.env.production` (OPENROUTER_API_KEY, OPENROUTER_DEFAULT_MODEL, ADMIN_API_KEY)
+- **DB credentials**: `shosetu:shosetu@db:5432/shosetu_reader` (set in docker-compose.yml)
+- **Migrations**: Run automatically on container start via `docker-entrypoint.sh` → `node migrate.mjs`
+
+### Environment Selection
+
+- Default to **local dev** for all work, testing, and iteration
+- Only deploy to production when the user explicitly requests it (e.g., "deploy to production", "push to aries")
+- When deploying to production, always push to origin first, then SSH and pull on aries
+
 ## Commits
 
 - Short imperative subjects: `Add novel registration endpoint`, `Fix episode checksum comparison`
