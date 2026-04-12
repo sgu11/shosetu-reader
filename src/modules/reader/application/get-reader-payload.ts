@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db/client";
 import { episodes, novels, translations, translationSettings } from "@/lib/db/schema";
 import { getDefaultUserId } from "@/lib/auth/default-user";
 import { env } from "@/lib/env";
+import { translateTexts } from "@/lib/translate-cache";
 import type { ReaderPayload } from "../api/schemas";
 
 export async function getReaderPayload(
@@ -74,6 +75,13 @@ export async function getReaderPayload(
 
   const configuredModel = settings?.modelName ?? env.OPENROUTER_DEFAULT_MODEL;
 
+  // Translate episode title if it's not just a number
+  let titleKo: string | null = null;
+  if (episode.titleJa) {
+    const cache = await translateTexts([episode.titleJa]);
+    titleKo = cache.get(episode.titleJa) ?? null;
+  }
+
   return {
     novel: {
       id: novel.id,
@@ -85,6 +93,7 @@ export async function getReaderPayload(
       id: episode.id,
       episodeNumber: episode.episodeNumber,
       titleJa: episode.titleJa,
+      titleKo,
       sourceTextJa: episode.normalizedTextJa,
     },
     translation: translation

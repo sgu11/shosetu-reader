@@ -26,6 +26,7 @@ export const episodeListItemSchema = z.object({
   id: z.string().uuid(),
   episodeNumber: z.number().int(),
   titleJa: z.string().nullable(),
+  titleKo: z.string().nullable(),
   fetchStatus: z.enum(["pending", "fetching", "fetched", "failed"]),
   hasTranslation: z.boolean(),
   translationStatus: z.enum(["queued", "processing", "available", "failed"]).nullable(),

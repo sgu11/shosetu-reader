@@ -130,9 +130,18 @@ export default async function NovelDetailPage({ params }: Props) {
                     <span className="text-sm text-muted">
                       #{ep.episodeNumber}
                     </span>
-                    <span className="text-sm">
-                      {ep.titleJa ?? `Episode ${ep.episodeNumber}`}
-                    </span>
+                    <div className="min-w-0">
+                      {locale === "ko" && ep.titleKo ? (
+                        <>
+                          <span className="block truncate text-sm">{ep.titleKo}</span>
+                          <span className="block truncate text-xs text-muted/60">{ep.titleJa}</span>
+                        </>
+                      ) : (
+                        <span className="text-sm">
+                          {ep.titleJa ?? `Episode ${ep.episodeNumber}`}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                     {ep.translationStatus === "available" ? (

@@ -1,6 +1,7 @@
 import { eq, and, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { novels, episodes, translations } from "@/lib/db/schema";
+import { translateTexts } from "@/lib/translate-cache";
 import type { NovelResponse, EpisodeListItem } from "../api/schemas";
 
 export async function getNovelById(
@@ -16,16 +17,30 @@ export async function getNovelById(
 
   if (!row) return null;
 
+  // Translate title and summary if not already cached in novels table
+  let titleKo = row.titleKo;
+  let summaryKo = row.summaryKo;
+
+  const textsToTranslate: string[] = [];
+  if (!titleKo) textsToTranslate.push(row.titleJa);
+  if (!summaryKo && row.summaryJa) textsToTranslate.push(row.summaryJa);
+
+  if (textsToTranslate.length > 0) {
+    const cache = await translateTexts(textsToTranslate);
+    if (!titleKo) titleKo = cache.get(row.titleJa) ?? null;
+    if (!summaryKo && row.summaryJa) summaryKo = cache.get(row.summaryJa) ?? null;
+  }
+
   return {
     id: row.id,
     sourceNcode: row.sourceNcode,
     sourceUrl: row.sourceUrl,
     titleJa: row.titleJa,
-    titleKo: row.titleKo,
+    titleKo,
     titleNormalized: row.titleNormalized,
     authorName: row.authorName,
     summaryJa: row.summaryJa,
-    summaryKo: row.summaryKo,
+    summaryKo,
     isCompleted: row.isCompleted,
     totalEpisodes: row.totalEpisodes,
     lastSourceSyncAt: row.lastSourceSyncAt?.toISOString() ?? null,
@@ -73,10 +88,19 @@ export async function getEpisodesByNovelId(
     .where(eq(episodes.novelId, novelId))
     .orderBy(episodes.episodeNumber);
 
+  // Collect non-number episode titles for translation
+  const titlesToTranslate = rows
+    .map((r) => r.titleJa)
+    .filter((t): t is string => t != null && t.trim() !== "");
+  const titleCache = titlesToTranslate.length > 0
+    ? await translateTexts(titlesToTranslate)
+    : new Map<string, string>();
+
   const items: EpisodeListItem[] = rows.map((row) => ({
     id: row.id,
     episodeNumber: row.episodeNumber,
     titleJa: row.titleJa,
+    titleKo: row.titleJa ? (titleCache.get(row.titleJa) ?? null) : null,
     fetchStatus: row.fetchStatus,
     hasTranslation: row.translationStatus === "available",
     translationStatus: row.translationStatus as EpisodeListItem["translationStatus"],

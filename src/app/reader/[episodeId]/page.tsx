@@ -61,9 +61,16 @@ export default async function ReaderPage({ params }: Props) {
       <main className="reader-area mx-auto w-full flex-1 px-6 py-10">
         {/* Episode title */}
         {episode.titleJa && (
-          <h1 className="mb-10 text-center text-2xl font-normal tracking-tight">
-            {episode.titleJa}
-          </h1>
+          <div className="mb-10 text-center">
+            {locale === "ko" && episode.titleKo ? (
+              <>
+                <h1 className="text-2xl font-normal tracking-tight">{episode.titleKo}</h1>
+                <p className="mt-1 text-sm text-muted/60">{episode.titleJa}</p>
+              </>
+            ) : (
+              <h1 className="text-2xl font-normal tracking-tight">{episode.titleJa}</h1>
+            )}
+          </div>
         )}
 
         {/* Episode body */}

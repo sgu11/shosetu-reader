@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { novels } from "@/lib/db/schema";
+import { novels, titleTranslationCache } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 
 /**
@@ -75,6 +75,15 @@ export async function translateNovelMetadata(novelId: string): Promise<void> {
           updatedAt: new Date(),
         })
         .where(eq(novels.id, novelId));
+
+      // Also cache in title_translation_cache for ranking reuse
+      const cacheRows: { titleJa: string; titleKo: string }[] = [
+        { titleJa: novel.titleJa, titleKo: parsed.titleKo },
+      ];
+      if (novel.summaryJa && typeof parsed.summaryKo === "string") {
+        cacheRows.push({ titleJa: novel.summaryJa, titleKo: parsed.summaryKo });
+      }
+      await db.insert(titleTranslationCache).values(cacheRows).onConflictDoNothing();
     }
   } catch {
     // JSON parse failed — silently skip

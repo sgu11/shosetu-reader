@@ -13,6 +13,7 @@ export const readerPayloadSchema = z.object({
     id: z.string().uuid(),
     episodeNumber: z.number().int(),
     titleJa: z.string().nullable(),
+    titleKo: z.string().nullable(),
     sourceTextJa: z.string().nullable(),
   }),
   translation: z
