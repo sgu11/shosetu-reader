@@ -323,7 +323,7 @@ export function TranslationToggle({
 
   return (
     <div className="relative">
-      <div className="flex flex-wrap items-center gap-2 min-h-[2rem]">
+      <div className="flex items-center gap-2 min-h-[2rem]">
         <div className="flex rounded-full border border-border p-0.5">
           <button
             type="button"
@@ -353,7 +353,7 @@ export function TranslationToggle({
         </div>
 
         {isRateLimited && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/5 px-3 py-1 text-xs font-medium text-warning">
+          <span className="hidden sm:inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/5 px-3 py-1 text-xs font-medium text-warning">
             {t("translation.rateLimited")}
           </span>
         )}
@@ -373,8 +373,8 @@ export function TranslationToggle({
             {isTranslating ? (
               <>
                 <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-                <span>{t("translation.translating")}</span>
-                <span className="text-muted/60">{pendingShortModel ?? shortModel}</span>
+                <span className="hidden sm:inline">{t("translation.translating")}</span>
+                <span className="hidden sm:inline text-muted/60">{pendingShortModel ?? shortModel}</span>
               </>
             ) : (
               <>
@@ -383,7 +383,7 @@ export function TranslationToggle({
                     ? (isFailed ? t("translation.failedRetry") : t("translation.translate"))
                     : t("translation.model")}
                 </span>
-                <span>{shortModel}</span>
+                <span className="hidden sm:inline">{shortModel}</span>
               </>
             )}
             <svg className={`h-3 w-3 transition-transform ${modelMenuOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

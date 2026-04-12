@@ -79,7 +79,7 @@ export default async function ReaderPage({ params }: Props) {
             <span className="invisible shrink-0 rounded-md bg-surface-strong px-4 py-2 text-sm font-medium">&larr;</span>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <TranslationToggle
               episodeId={episodeId}
               initialTranslation={initialTranslation}
