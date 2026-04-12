@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslation } from "@/lib/i18n/client";
 
 type Period = "daily" | "weekly" | "monthly" | "quarterly";
 
@@ -15,19 +16,20 @@ interface RankingItem {
   novelId: string | null;
 }
 
-const periods: { value: Period; label: string }[] = [
-  { value: "daily", label: "Daily" },
-  { value: "weekly", label: "Weekly" },
-  { value: "monthly", label: "Monthly" },
-  { value: "quarterly", label: "Quarterly" },
-];
-
 export default function RankingPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [period, setPeriod] = useState<Period>("daily");
   const [items, setItems] = useState<RankingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [registering, setRegistering] = useState<string | null>(null);
+
+  const periods: { value: Period; label: string }[] = [
+    { value: "daily", label: t("ranking.daily") },
+    { value: "weekly", label: t("ranking.weekly") },
+    { value: "monthly", label: t("ranking.monthly") },
+    { value: "quarterly", label: t("ranking.quarterly") },
+  ];
 
   const fetchRanking = useCallback(async (p: Period) => {
     setLoading(true);
@@ -59,7 +61,6 @@ export default function RankingPage() {
 
       if (res.ok) {
         const data = await res.json();
-        // Update item in list with the new novelId
         setItems((prev) =>
           prev.map((item) =>
             item.ncode === ncode
@@ -79,10 +80,10 @@ export default function RankingPage() {
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-10">
       <div className="space-y-2">
         <h1 className="text-3xl font-normal leading-none tracking-tight">
-          Ranking
+          {t("ranking.title")}
         </h1>
         <p className="text-sm text-muted">
-          Discover popular novels on Syosetu.
+          {t("ranking.subtitle")}
         </p>
       </div>
 
@@ -107,11 +108,11 @@ export default function RankingPage() {
       {/* Ranking list */}
       {loading ? (
         <div className="surface-card rounded-xl p-8 text-center text-sm text-muted">
-          Loading rankings...
+          {t("ranking.loading")}
         </div>
       ) : items.length === 0 ? (
         <div className="surface-card rounded-xl p-8 text-center text-sm text-muted">
-          No ranking data available.
+          {t("ranking.empty")}
         </div>
       ) : (
         <div className="space-y-1">
@@ -132,9 +133,9 @@ export default function RankingPage() {
                 </p>
                 <div className="flex items-center gap-3 text-xs text-muted">
                   <span>{item.authorName}</span>
-                  <span>{item.totalEpisodes} eps</span>
+                  <span>{item.totalEpisodes} {t("ranking.eps")}</span>
                   <span className={item.isCompleted ? "text-success" : "text-accent"}>
-                    {item.isCompleted ? "Completed" : "Ongoing"}
+                    {item.isCompleted ? t("ranking.completed") : t("ranking.ongoing")}
                   </span>
                 </div>
               </div>
@@ -146,7 +147,7 @@ export default function RankingPage() {
                   onClick={() => router.push(`/novels/${item.novelId}`)}
                   className="btn-pill btn-secondary shrink-0 text-xs"
                 >
-                  View
+                  {t("ranking.view")}
                 </button>
               ) : (
                 <button
@@ -155,7 +156,7 @@ export default function RankingPage() {
                   disabled={registering === item.ncode}
                   className="btn-pill btn-accent shrink-0 text-xs"
                 >
-                  {registering === item.ncode ? "..." : "Register"}
+                  {registering === item.ncode ? "..." : t("ranking.register")}
                 </button>
               )}
             </div>

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Source_Code_Pro, Noto_Serif_JP } from "next/font/google";
 import { Nav } from "@/components/nav";
+import { LocaleProvider } from "@/components/locale-provider";
+import { getLocale } from "@/lib/i18n";
 import "./globals.css";
 
 const codeFont = Source_Code_Pro({
@@ -20,14 +22,16 @@ export const metadata: Metadata = {
   description: "Calm web reader for Syosetu novels with resume and translation flows.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+
   return (
     <html
-      lang="en"
+      lang={locale}
       className={`${codeFont.variable} ${readerFont.variable} h-full antialiased`}
     >
       <head>
@@ -39,8 +43,10 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
-        <Nav />
-        {children}
+        <LocaleProvider locale={locale}>
+          <Nav />
+          {children}
+        </LocaleProvider>
       </body>
     </html>
   );

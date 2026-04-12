@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslation } from "@/lib/i18n/client";
 
 interface Props {
   novelId: string;
@@ -9,6 +10,7 @@ interface Props {
 
 export function IngestButton({ novelId }: Props) {
   const router = useRouter();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
@@ -28,11 +30,15 @@ export function IngestButton({ novelId }: Props) {
       }
 
       setResult(
-        `Discovered ${data.discovered} new episodes. Fetched ${data.fetched}, failed ${data.failed}.`,
+        t("ingest.result", {
+          discovered: data.discovered,
+          fetched: data.fetched,
+          failed: data.failed,
+        }),
       );
       router.refresh();
     } catch {
-      setResult("Network error");
+      setResult(t("ingest.networkError"));
     } finally {
       setLoading(false);
     }
@@ -46,7 +52,7 @@ export function IngestButton({ novelId }: Props) {
         disabled={loading}
         className="btn-pill btn-accent"
       >
-        {loading ? "Ingesting..." : "Ingest episodes"}
+        {loading ? t("ingest.ingesting") : t("ingest.ingest")}
       </button>
       {result && (
         <p className="text-xs text-muted">{result}</p>

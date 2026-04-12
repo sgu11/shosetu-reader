@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { getContinueReading } from "@/modules/library/application/get-library";
+import { getLocale, t } from "@/lib/i18n";
 
 export default async function Home() {
+  const locale = await getLocale();
   let continueItems: Awaited<ReturnType<typeof getContinueReading>> = [];
 
   try {
@@ -15,18 +17,17 @@ export default async function Home() {
       {/* Hero */}
       <section className="space-y-4">
         <h1 className="text-4xl font-normal leading-none tracking-tight md:text-5xl">
-          Shosetu Reader
+          {t(locale, "home.title")}
         </h1>
         <p className="max-w-xl text-base leading-relaxed text-muted">
-          A calm reading environment for Japanese web novels from Syosetu, with
-          resume flow and Korean translation.
+          {t(locale, "home.subtitle")}
         </p>
         <div className="flex gap-3">
           <Link href="/register" className="btn-pill btn-accent">
-            Add novel
+            {t(locale, "home.addNovel")}
           </Link>
           <Link href="/library" className="btn-pill btn-secondary">
-            My library
+            {t(locale, "home.myLibrary")}
           </Link>
         </div>
       </section>
@@ -34,7 +35,7 @@ export default async function Home() {
       {/* Continue reading */}
       {continueItems.length > 0 && (
         <section className="space-y-4">
-          <h2 className="text-xl font-normal">Continue reading</h2>
+          <h2 className="text-xl font-normal">{t(locale, "home.continueReading")}</h2>
           <div className="space-y-1">
             {continueItems.map((item) => (
               <Link

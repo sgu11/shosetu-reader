@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslation } from "@/lib/i18n/client";
 
 interface RegisterResult {
   novel: {
@@ -18,6 +19,7 @@ interface RegisterResult {
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +47,7 @@ export default function RegisterPage() {
 
       setResult(data);
     } catch {
-      setError("Network error. Please try again.");
+      setError(t("register.networkError"));
     } finally {
       setLoading(false);
     }
@@ -55,10 +57,10 @@ export default function RegisterPage() {
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-6 py-10">
       <div className="space-y-2">
         <h1 className="text-3xl font-normal leading-none tracking-tight">
-          Register a novel
+          {t("register.title")}
         </h1>
         <p className="text-sm leading-7 text-muted">
-          Paste a Syosetu URL or enter an ncode to add a novel.
+          {t("register.subtitle")}
         </p>
       </div>
 
@@ -67,7 +69,7 @@ export default function RegisterPage() {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="https://ncode.syosetu.com/n1234ab/ or n1234ab"
+          placeholder={t("register.placeholder")}
           className="flex-1 rounded-md border border-border bg-surface px-4 py-3 text-sm text-foreground placeholder:text-muted/50 focus:border-border-strong focus:outline-none"
           disabled={loading}
         />
@@ -76,7 +78,7 @@ export default function RegisterPage() {
           disabled={loading || !input.trim()}
           className="btn-pill btn-accent"
         >
-          {loading ? "Registering..." : "Register"}
+          {loading ? t("register.submitting") : t("register.submit")}
         </button>
       </form>
 
@@ -90,7 +92,7 @@ export default function RegisterPage() {
         <div className="surface-card space-y-4 rounded-xl p-6">
           <div className="flex items-center gap-3">
             <span className="rounded-full border border-border-accent bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
-              {result.isNew ? "Newly registered" : "Already registered"}
+              {result.isNew ? t("register.newlyRegistered") : t("register.alreadyRegistered")}
             </span>
             <span className="code-label">
               {result.novel.sourceNcode}
@@ -100,7 +102,7 @@ export default function RegisterPage() {
           <h2 className="text-xl font-normal">{result.novel.titleJa}</h2>
 
           {result.novel.authorName && (
-            <p className="text-sm text-muted">by {result.novel.authorName}</p>
+            <p className="text-sm text-muted">{t("register.by")} {result.novel.authorName}</p>
           )}
 
           {result.novel.summaryJa && (
@@ -111,18 +113,19 @@ export default function RegisterPage() {
 
           <div className="flex items-center gap-4 text-xs text-muted">
             {result.novel.totalEpisodes != null && (
-              <span>{result.novel.totalEpisodes} episodes</span>
+              <span>{result.novel.totalEpisodes} {t("register.episodes")}</span>
             )}
             {result.novel.isCompleted != null && (
-              <span>{result.novel.isCompleted ? "Completed" : "Ongoing"}</span>
+              <span>{result.novel.isCompleted ? t("register.completed") : t("register.ongoing")}</span>
             )}
           </div>
 
           <button
+            type="button"
             onClick={() => router.push(`/novels/${result.novel.id}`)}
             className="btn-pill btn-accent"
           >
-            View novel details
+            {t("register.viewDetails")}
           </button>
         </div>
       )}

@@ -3,12 +3,15 @@ import Link from "next/link";
 import { getReaderPayload } from "@/modules/reader/application/get-reader-payload";
 import { ProgressTracker } from "@/components/progress-tracker";
 import { TranslationToggle } from "@/components/translation-toggle";
+import { ReaderSettings } from "@/components/reader-settings";
+import { getLocale, t } from "@/lib/i18n";
 
 interface Props {
   params: Promise<{ episodeId: string }>;
 }
 
 export default async function ReaderPage({ params }: Props) {
+  const locale = await getLocale();
   const { episodeId } = await params;
   const payload = await getReaderPayload(episodeId);
 
@@ -39,10 +42,13 @@ export default async function ReaderPage({ params }: Props) {
           >
             &larr; {novel.titleJa}
           </Link>
-          <TranslationToggle
-            episodeId={episodeId}
-            initialTranslation={initialTranslation}
-          />
+          <div className="flex items-center gap-2">
+            <TranslationToggle
+              episodeId={episodeId}
+              initialTranslation={initialTranslation}
+            />
+            <ReaderSettings />
+          </div>
           <span className="code-label">
             #{episode.episodeNumber}
           </span>
@@ -50,7 +56,7 @@ export default async function ReaderPage({ params }: Props) {
       </header>
 
       {/* Reading area */}
-      <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-10">
+      <main className="reader-area mx-auto w-full flex-1 px-6 py-10">
         {/* Episode title */}
         {episode.titleJa && (
           <h1 className="mb-10 text-center text-2xl font-normal tracking-tight">
@@ -64,7 +70,7 @@ export default async function ReaderPage({ params }: Props) {
             {/* Original Japanese text */}
             <div
               data-original-text
-              className="reader-text space-y-1 text-base leading-[2] tracking-wide text-secondary"
+              className="reader-text space-y-1 tracking-wide text-secondary"
             >
               {paragraphs.map((line, i) => (
                 <p key={i} className={line.trim() === "" ? "h-6" : ""}>
@@ -75,12 +81,12 @@ export default async function ReaderPage({ params }: Props) {
             {/* Korean translation (populated by TranslationToggle) */}
             <div
               data-reader-text
-              className="hidden space-y-1 text-base leading-[2] text-secondary"
+              className="reader-text hidden space-y-1 text-secondary"
             />
           </>
         ) : (
           <div className="surface-card rounded-xl p-8 text-center text-sm text-muted">
-            Episode content has not been fetched yet.
+            {t(locale, "reader.noContent")}
           </div>
         )}
       </main>
@@ -93,7 +99,7 @@ export default async function ReaderPage({ params }: Props) {
               href={`/reader/${navigation.prevEpisodeId}`}
               className="rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-contrast"
             >
-              &larr; Previous
+              &larr; {t(locale, "reader.previous")}
             </Link>
           ) : (
             <span />
@@ -103,7 +109,7 @@ export default async function ReaderPage({ params }: Props) {
             href={`/novels/${novel.id}`}
             className="text-sm text-muted hover:text-foreground transition-colors"
           >
-            Episode list
+            {t(locale, "reader.episodeList")}
           </Link>
 
           {navigation.nextEpisodeId ? (
@@ -111,7 +117,7 @@ export default async function ReaderPage({ params }: Props) {
               href={`/reader/${navigation.nextEpisodeId}`}
               className="rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-contrast"
             >
-              Next &rarr;
+              {t(locale, "reader.next")} &rarr;
             </Link>
           ) : (
             <span />

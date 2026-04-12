@@ -4,12 +4,14 @@ import { isSubscribed } from "@/modules/library/application/subscribe";
 import Link from "next/link";
 import { IngestButton } from "@/components/ingest-button";
 import { SubscribeButton } from "@/components/subscribe-button";
+import { getLocale, t } from "@/lib/i18n";
 
 interface Props {
   params: Promise<{ novelId: string }>;
 }
 
 export default async function NovelDetailPage({ params }: Props) {
+  const locale = await getLocale();
   const { novelId } = await params;
   const novel = await getNovelById(novelId);
 
@@ -33,7 +35,7 @@ export default async function NovelDetailPage({ params }: Props) {
         href="/library"
         className="text-sm text-muted hover:text-foreground transition-colors"
       >
-        &larr; Library
+        &larr; {t(locale, "novel.backToLibrary")}
       </Link>
 
       {/* Novel header */}
@@ -50,7 +52,7 @@ export default async function NovelDetailPage({ params }: Props) {
                   : "bg-accent/10 text-accent"
               }`}
             >
-              {novel.isCompleted ? "Completed" : "Ongoing"}
+              {novel.isCompleted ? t(locale, "novel.completed") : t(locale, "novel.ongoing")}
             </span>
           )}
         </div>
@@ -60,7 +62,7 @@ export default async function NovelDetailPage({ params }: Props) {
         </h1>
 
         {novel.authorName && (
-          <p className="text-sm text-muted">by {novel.authorName}</p>
+          <p className="text-sm text-muted">{t(locale, "novel.by")} {novel.authorName}</p>
         )}
 
         {novel.summaryJa && (
@@ -71,11 +73,11 @@ export default async function NovelDetailPage({ params }: Props) {
 
         <div className="flex items-center gap-6 text-sm text-muted">
           {novel.totalEpisodes != null && (
-            <span>{novel.totalEpisodes} episodes</span>
+            <span>{novel.totalEpisodes} {t(locale, "novel.episodes")}</span>
           )}
           {novel.lastSourceSyncAt && (
             <span>
-              Synced{" "}
+              {t(locale, "novel.synced")}{" "}
               {new Date(novel.lastSourceSyncAt).toLocaleDateString()}
             </span>
           )}
@@ -88,7 +90,7 @@ export default async function NovelDetailPage({ params }: Props) {
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 text-sm text-accent hover:text-accent-hover transition-colors"
           >
-            View on Syosetu &rarr;
+            {t(locale, "novel.viewOnSyosetu")} &rarr;
           </a>
         </div>
 
@@ -101,7 +103,7 @@ export default async function NovelDetailPage({ params }: Props) {
       {/* Episode list */}
       <section className="space-y-4">
         <h2 className="text-xl font-normal">
-          Episodes{" "}
+          {t(locale, "novel.episodesHeading")}{" "}
           <span className="text-base text-muted">
             ({totalCount})
           </span>
@@ -109,8 +111,7 @@ export default async function NovelDetailPage({ params }: Props) {
 
         {episodes.length === 0 ? (
           <div className="surface-card rounded-xl p-7 text-center text-sm text-muted">
-            No episodes ingested yet. Click &quot;Ingest episodes&quot; above to
-            fetch them from Syosetu.
+            {t(locale, "novel.noEpisodes")}
           </div>
         ) : (
           <div className="space-y-1">

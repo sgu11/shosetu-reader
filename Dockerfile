@@ -28,10 +28,18 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Migration assets
+COPY --from=builder /app/drizzle ./drizzle
+COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=builder /app/src/lib/db/schema ./src/lib/db/schema
+COPY --from=deps /app/node_modules/drizzle-kit ./node_modules/drizzle-kit
+COPY --from=deps /app/node_modules/drizzle-orm ./node_modules/drizzle-orm
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+
 USER nextjs
 
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-CMD ["node", "server.js"]
+CMD ["sh", "docker-entrypoint.sh"]

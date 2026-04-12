@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { useTranslation } from "@/lib/i18n/client";
 
 interface TranslationState {
   status: "not_requested" | "queued" | "processing" | "available" | "failed";
@@ -13,6 +14,11 @@ interface Props {
 }
 
 export function TranslationToggle({ episodeId, initialTranslation }: Props) {
+  const { t } = useTranslation();
+  const statusLabels = {
+    translating: t("translation.translating"),
+    failedRetry: t("translation.failedRetry"),
+  };
   const [language, setLanguage] = useState<"ja" | "ko">(
     initialTranslation?.status === "available" ? "ko" : "ja",
   );
@@ -139,7 +145,7 @@ export function TranslationToggle({ episodeId, initialTranslation }: Props) {
 
       {/* Status indicator */}
       {translation.status === "queued" || translation.status === "processing" ? (
-        <span className="text-xs text-muted">Translating...</span>
+        <span className="text-xs text-muted">{statusLabels.translating}</span>
       ) : translation.status === "failed" ? (
         <button
           type="button"
@@ -147,7 +153,7 @@ export function TranslationToggle({ episodeId, initialTranslation }: Props) {
           disabled={requesting}
           className="text-xs text-error hover:underline"
         >
-          Failed — retry
+          {statusLabels.failedRetry}
         </button>
       ) : null}
     </div>

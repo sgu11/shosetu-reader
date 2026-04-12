@@ -29,6 +29,11 @@
 
   /* Deep surface for buttons */
   --deep: #0f0f0f;
+
+  /* Reader defaults (overridden by ReaderSettings component) */
+  --reader-font-size: 16px;
+  --reader-line-height: 2;
+  --reader-content-width: 672px;
 }
 
 @theme inline {
@@ -81,6 +86,13 @@ a {
 /* Reader body — serif font for Japanese text */
 .reader-text {
   font-family: var(--font-reader), serif;
+  font-size: var(--reader-font-size);
+  line-height: var(--reader-line-height);
+}
+
+/* Reader content area — width controlled by settings */
+.reader-area {
+  max-width: var(--reader-content-width);
 }
 
 /* Code/technical labels — monospace uppercase */
