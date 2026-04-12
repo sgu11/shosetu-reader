@@ -3,17 +3,20 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { useTranslation } from "@/lib/i18n/client";
 
-type Theme = "dark" | "light";
+type Theme = "dark" | "light" | "system";
+
+const CYCLE: Record<Theme, Theme> = { system: "light", light: "dark", dark: "system" };
 
 function getThemeSnapshot(): Theme {
-  if (typeof document === "undefined") return "dark";
-  return document.documentElement.getAttribute("data-theme") === "light"
-    ? "light"
-    : "dark";
+  if (typeof document === "undefined") return "system";
+  const v = document.documentElement.getAttribute("data-theme");
+  if (v === "light") return "light";
+  if (v === "dark") return "dark";
+  return "system";
 }
 
 function getServerSnapshot(): Theme {
-  return "dark";
+  return "system";
 }
 
 function subscribeToTheme(callback: () => void) {
@@ -26,16 +29,28 @@ function subscribeToTheme(callback: () => void) {
 }
 
 function applyTheme(theme: Theme) {
-  document.cookie = `theme=${theme};path=/;max-age=${365 * 24 * 60 * 60};SameSite=Lax`;
+  if (theme === "system") {
+    // Remove cookie so server defaults to "system"
+    document.cookie = "theme=;path=/;max-age=0;SameSite=Lax";
+  } else {
+    document.cookie = `theme=${theme};path=/;max-age=${365 * 24 * 60 * 60};SameSite=Lax`;
+  }
   document.documentElement.setAttribute("data-theme", theme);
 }
+
+const ICONS: Record<Theme, string> = { dark: "\u263D", light: "\u2600", system: "\u25D0" };
+const LABELS: Record<Theme, "settings.themeDark" | "settings.themeLight" | "settings.themeSystem"> = {
+  dark: "settings.themeDark",
+  light: "settings.themeLight",
+  system: "settings.themeSystem",
+};
 
 export function ThemeToggle() {
   const { t } = useTranslation();
   const theme = useSyncExternalStore(subscribeToTheme, getThemeSnapshot, getServerSnapshot);
 
   const toggle = useCallback(() => {
-    applyTheme(theme === "dark" ? "light" : "dark");
+    applyTheme(CYCLE[theme]);
   }, [theme]);
 
   return (
@@ -45,17 +60,8 @@ export function ThemeToggle() {
       className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:border-border-strong hover:text-foreground"
       aria-label={t("settings.toggleTheme")}
     >
-      {theme === "dark" ? (
-        <>
-          <span aria-hidden>&#9789;</span>
-          <span>{t("settings.themeDark")}</span>
-        </>
-      ) : (
-        <>
-          <span aria-hidden>&#9788;</span>
-          <span>{t("settings.themeLight")}</span>
-        </>
-      )}
+      <span aria-hidden>{ICONS[theme]}</span>
+      <span>{t(LABELS[theme])}</span>
     </button>
   );
 }

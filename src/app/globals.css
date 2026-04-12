@@ -69,6 +69,29 @@
   --deep: #ffffff;
 }
 
+/* System theme — follows OS preference via media query */
+@media (prefers-color-scheme: light) {
+  [data-theme="system"] {
+    --background: #fafafa;
+    --surface: #ffffff;
+    --surface-strong: #f0f0f0;
+    --foreground: #171717;
+    --muted: #6b6b6b;
+    --secondary: #4a4a4a;
+    --accent: #059669;
+    --accent-hover: #047857;
+    --accent-contrast: #ffffff;
+    --success: #059669;
+    --warning: #d97706;
+    --error: #dc2626;
+    --border-subtle: #f0f0f0;
+    --border: #e5e5e5;
+    --border-strong: #d4d4d4;
+    --border-accent: rgba(5, 150, 105, 0.3);
+    --deep: #ffffff;
+  }
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
