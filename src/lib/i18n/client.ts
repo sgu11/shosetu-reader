@@ -5,7 +5,7 @@ import { dictionaries, type Locale, type TranslationKey } from "./dictionaries";
 
 export type { Locale, TranslationKey };
 
-export const LocaleContext = createContext<Locale>("en");
+export const LocaleContext = createContext<Locale>("ko");
 
 export function useLocale(): Locale {
   return useContext(LocaleContext);

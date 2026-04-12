@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
       .limit(1);
 
     return NextResponse.json({
-      locale: user?.preferredUiLocale ?? "en",
+      locale: user?.preferredUiLocale ?? "ko",
       readerLanguage: user?.preferredReaderLanguage ?? "ja",
       theme: user?.theme ?? "system",
       reader: prefs ?? {

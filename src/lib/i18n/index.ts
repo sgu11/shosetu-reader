@@ -5,7 +5,7 @@ export type { Locale, TranslationKey };
 export { dictionaries };
 
 const COOKIE_NAME = "locale";
-const DEFAULT_LOCALE: Locale = "en";
+const DEFAULT_LOCALE: Locale = "ko";
 
 /** Read locale from cookies (server-side). */
 export async function getLocale(): Promise<Locale> {

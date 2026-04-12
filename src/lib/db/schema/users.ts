@@ -5,7 +5,7 @@ export const users = pgTable("users", {
   id: uuid().primaryKey().defaultRandom(),
   email: text().notNull().unique(),
   displayName: text("display_name"),
-  preferredUiLocale: uiLocaleEnum("preferred_ui_locale").notNull().default("en"),
+  preferredUiLocale: uiLocaleEnum("preferred_ui_locale").notNull().default("ko"),
   preferredReaderLanguage: contentLanguageEnum("preferred_reader_language")
     .notNull()
     .default("ja"),
