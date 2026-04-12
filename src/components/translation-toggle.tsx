@@ -323,7 +323,7 @@ export function TranslationToggle({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 min-h-[2rem]">
         <div className="flex rounded-full border border-border p-0.5">
           <button
             type="button"
@@ -487,14 +487,16 @@ export function TranslationToggle({
         </div>
       </div>
 
-      {feedback && (
-        <p
-          aria-live="polite"
-          className={`text-xs ${feedback.tone === "error" ? "text-error" : "text-muted"}`}
-        >
-          {feedback.message}
-        </p>
-      )}
+      <p
+        aria-live="polite"
+        className={`text-xs transition-opacity ${
+          feedback
+            ? feedback.tone === "error" ? "text-error opacity-100" : "text-muted opacity-100"
+            : "opacity-0"
+        }`}
+      >
+        {feedback?.message ?? "\u00A0"}
+      </p>
 
       {pendingTranslation?.status === "processing" && pendingTranslation.progressEstimate && (
         <div className="space-y-1 rounded-lg border border-border bg-background px-3 py-2">

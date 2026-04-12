@@ -189,7 +189,7 @@ export default function RankingPage() {
                 <button
                   type="button"
                   onClick={() => router.push(`/novels/${item.novelId}`)}
-                  className="btn-pill btn-secondary shrink-0 text-xs"
+                  className="btn-pill btn-secondary shrink-0 text-xs min-w-[5rem]"
                 >
                   {t("ranking.view")}
                 </button>
@@ -198,9 +198,14 @@ export default function RankingPage() {
                   type="button"
                   onClick={() => handleRegister(item.ncode)}
                   disabled={registering === item.ncode}
-                  className="btn-pill btn-accent shrink-0 text-xs"
+                  className="btn-pill btn-accent shrink-0 text-xs min-w-[5rem]"
                 >
-                  {registering === item.ncode ? "..." : t("ranking.register")}
+                  {registering === item.ncode ? (
+                    <svg className="mx-auto h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : t("ranking.register")}
                 </button>
               )}
             </div>

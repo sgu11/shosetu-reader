@@ -89,15 +89,10 @@ export default async function ReaderPage({ params }: Props) {
               &larr; {t(locale, "reader.previous")}
             </Link>
           ) : (
-            <span />
+            <span className="invisible rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium">{t(locale, "reader.previous")}</span>
           )}
 
-          <Link
-            href={`/novels/${novel.id}`}
-            className="text-sm text-muted hover:text-foreground transition-colors"
-          >
-            {t(locale, "reader.episodeList")}
-          </Link>
+          <span className="text-xs text-muted">#{episode.episodeNumber}</span>
 
           {navigation.nextEpisodeId ? (
             <Link
@@ -107,7 +102,7 @@ export default async function ReaderPage({ params }: Props) {
               {t(locale, "reader.next")} &rarr;
             </Link>
           ) : (
-            <span />
+            <span className="invisible rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium">{t(locale, "reader.next")}</span>
           )}
         </div>
       </nav>
@@ -170,15 +165,10 @@ export default async function ReaderPage({ params }: Props) {
               &larr; {t(locale, "reader.previous")}
             </Link>
           ) : (
-            <span />
+            <span className="invisible rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium">{t(locale, "reader.previous")}</span>
           )}
 
-          <Link
-            href={`/novels/${novel.id}`}
-            className="text-sm text-muted hover:text-foreground transition-colors"
-          >
-            {t(locale, "reader.episodeList")}
-          </Link>
+          <span className="text-xs text-muted">#{episode.episodeNumber}</span>
 
           {navigation.nextEpisodeId ? (
             <Link
@@ -188,7 +178,7 @@ export default async function ReaderPage({ params }: Props) {
               {t(locale, "reader.next")} &rarr;
             </Link>
           ) : (
-            <span />
+            <span className="invisible rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium">{t(locale, "reader.next")}</span>
           )}
         </div>
       </footer>

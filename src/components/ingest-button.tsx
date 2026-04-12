@@ -172,20 +172,6 @@ export function IngestButton({ novelId }: Props) {
       }
     });
 
-  const handleGenerateGlossary = () =>
-    run(async () => {
-      const res = await fetch(`/api/novels/${novelId}/glossary`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        setResult(typeof data.error === "string" ? data.error : t("ingest.requestFailed"));
-        setResultTone("error");
-        return;
-      }
-      setResult(t("glossary.generatedInfo", { episodes: data.episodeCount, date: new Date().toLocaleDateString() }));
-      setResultTone("success");
-      router.refresh();
-    });
-
   return (
     <div className="space-y-2">
       <div className="relative inline-block" ref={menuRef}>
@@ -193,7 +179,7 @@ export function IngestButton({ novelId }: Props) {
           type="button"
           onClick={() => setMenuOpen(!menuOpen)}
           disabled={isBusy}
-          className="btn-pill btn-secondary gap-1.5"
+          className="btn-pill btn-secondary gap-1.5 min-w-[7rem]"
         >
           {isBusy ? (
             <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -247,34 +233,24 @@ export function IngestButton({ novelId }: Props) {
               {t("ingest.bulkTranslateAll")}
             </button>
 
-            <div className="my-1 border-t border-border" />
-
-            <p className="px-3 py-1.5 text-xs font-medium text-muted/60">{t("glossary.title")}</p>
-            <button
-              type="button"
-              onClick={handleGenerateGlossary}
-              className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-muted transition-colors hover:text-foreground hover:bg-surface-strong"
-            >
-              {t("glossary.generateAction")}
-            </button>
           </div>
         )}
       </div>
 
-      {result && (
-        <p
-          aria-live="polite"
-          className={`text-xs ${
-            resultTone === "error"
-              ? "text-error"
+      <p
+        aria-live="polite"
+        className={`text-xs transition-opacity ${
+          result
+            ? resultTone === "error"
+              ? "text-error opacity-100"
               : resultTone === "success"
-                ? "text-success"
-                : "text-muted"
-          }`}
-        >
-          {result}
-        </p>
-      )}
+                ? "text-success opacity-100"
+                : "text-muted opacity-100"
+            : "opacity-0"
+        }`}
+      >
+        {result ?? "\u00A0"}
+      </p>
     </div>
   );
 }

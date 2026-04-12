@@ -143,18 +143,22 @@ export default function ProfilesPage() {
         </p>
       </div>
 
-      {feedback && (
+      <div
+        aria-live="polite"
+        className={`overflow-hidden transition-all duration-200 ${
+          feedback ? "max-h-20 opacity-100" : "max-h-0 opacity-0"
+        }`}
+      >
         <p
-          aria-live="polite"
           className={`rounded-lg border px-4 py-3 text-sm ${
-            feedback.tone === "error"
+            feedback?.tone === "error"
               ? "border-error/30 bg-error/5 text-error"
               : "border-success/30 bg-success/5 text-success"
           }`}
         >
-          {feedback.message}
+          {feedback?.message ?? "\u00A0"}
         </p>
-      )}
+      </div>
 
       <section className="surface-card space-y-5 rounded-xl p-6">
         <h2 className="text-lg font-normal">{t("profile.create")}</h2>
@@ -182,9 +186,14 @@ export default function ProfilesPage() {
           <button
             type="submit"
             disabled={creating}
-            className="btn-pill btn-accent"
+            className="btn-pill btn-accent min-w-[7rem]"
           >
-            {creating ? t("profile.creating") : t("profile.create")}
+            {creating ? (
+              <svg className="mx-auto h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : t("profile.create")}
           </button>
         </form>
       </section>
@@ -231,9 +240,14 @@ export default function ProfilesPage() {
                     type="button"
                     onClick={() => selectProfile(profile.id)}
                     disabled={busyProfileId === profile.id}
-                    className="btn-pill btn-secondary self-start text-xs"
+                    className="btn-pill btn-secondary self-start text-xs min-w-[5rem]"
                   >
-                    {busyProfileId === profile.id ? t("profile.switching") : t("profile.select")}
+                    {busyProfileId === profile.id ? (
+                      <svg className="mx-auto h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    ) : t("profile.select")}
                   </button>
                 )}
               </div>

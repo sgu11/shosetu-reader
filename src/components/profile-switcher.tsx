@@ -51,7 +51,13 @@ export function ProfileSwitcher() {
   }
 
   if (loading) {
-    return <span className="text-xs text-muted">{t("profile.loading")}</span>;
+    return (
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <span className="rounded-full border border-border px-3 py-1 text-xs text-transparent">
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        </span>
+      </div>
+    );
   }
 
   return (
