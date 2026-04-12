@@ -67,8 +67,10 @@ export const dictionaries = {
     "ingest.result": "Discovered {discovered} new episodes. Fetched {fetched}, failed {failed}.",
     "ingest.networkError": "Network error",
     "ingest.bulkTranslate": "Translate next {count}",
+    "ingest.bulkTranslateAll": "Translate all episodes",
     "ingest.bulkTranslating": "Requesting translations...",
     "ingest.bulkTranslateResult": "{queued} translations queued",
+    "ingest.bulkTranslateAllStarted": "Translating all {total} episodes in background",
     "ingest.bulkTranslateNone": "No untranslated episodes found",
 
     // Reader
@@ -146,19 +148,19 @@ export const dictionaries = {
     "nav.ranking": "랭킹",
     "nav.register": "등록",
     "nav.addNovel": "소설 추가",
-    "nav.brand": "쇼세츠 리더",
+    "nav.brand": "나로우 리더",
 
     // Home
-    "home.title": "쇼세츠 리더",
+    "home.title": "나로우 리더",
     "home.subtitle":
-      "시요세츠 일본 웹소설을 위한 편안한 읽기 환경. 이어읽기와 한국어 번역을 지원합니다.",
+      "나로우 일본 웹소설을 위한 편안한 읽기 환경. 이어읽기와 한국어 번역 지원.",
     "home.addNovel": "소설 추가",
     "home.myLibrary": "내 서재",
     "home.continueReading": "이어서 읽기",
 
     // Register
     "register.title": "소설 등록",
-    "register.subtitle": "시요세츠 URL을 붙여넣거나 ncode를 입력하세요.",
+    "register.subtitle": "나로우 URL을 붙여넣거나 ncode를 입력하세요.",
     "register.placeholder": "https://ncode.syosetu.com/n1234ab/ 또는 n1234ab",
     "register.submit": "등록",
     "register.submitting": "등록 중...",
@@ -190,10 +192,10 @@ export const dictionaries = {
     "novel.by": "작가",
     "novel.episodes": "화",
     "novel.synced": "동기화",
-    "novel.viewOnSyosetu": "시요세츠에서 보기",
+    "novel.viewOnSyosetu": "나로우 사이트에서 보기",
     "novel.episodesHeading": "에피소드",
     "novel.noEpisodes":
-      '에피소드가 아직 수집되지 않았습니다. 위의 "에피소드 수집" 버튼을 클릭하여 시요세츠에서 가져오세요.',
+      '에피소드가 아직 수집되지 않았습니다. 위의 "에피소드 수집" 버튼을 클릭하여 나로우에서 가져오세요.',
 
     // Subscribe button
     "subscribe.subscribed": "구독 중",
@@ -207,8 +209,10 @@ export const dictionaries = {
     "ingest.result": "새 에피소드 {discovered}화 발견. {fetched}화 수집, {failed}화 실패.",
     "ingest.networkError": "네트워크 오류",
     "ingest.bulkTranslate": "다음 {count}화 번역",
+    "ingest.bulkTranslateAll": "전체 에피소드 번역",
     "ingest.bulkTranslating": "번역 요청 중...",
     "ingest.bulkTranslateResult": "{queued}화 번역 대기열 추가",
+    "ingest.bulkTranslateAllStarted": "전체 {total}화 백그라운드 번역 시작",
     "ingest.bulkTranslateNone": "미번역 에피소드가 없습니다",
 
     // Reader
@@ -227,7 +231,7 @@ export const dictionaries = {
 
     // Ranking
     "ranking.title": "랭킹",
-    "ranking.subtitle": "시요세츠에서 인기 있는 소설을 찾아보세요.",
+    "ranking.subtitle": "나로우에서 인기 있는 소설을 찾아보세요.",
     "ranking.daily": "일간",
     "ranking.weekly": "주간",
     "ranking.monthly": "월간",
