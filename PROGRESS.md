@@ -175,11 +175,13 @@ Last updated: 2026-04-10
 - Configured default model distinguished from currently displayed model
 - Link to settings for model configuration
 
-### V2.8 Cost Estimation and Observability
-- Pull OpenRouter pricing metadata and cache it locally
-- Estimate input/output token cost per translation job
-- Persist per-translation estimated cost and aggregate cost per episode and novel
-- Surface cost summaries on episode rows, novel overview, and admin/ops views
+### V2.8 Cost Estimation and Observability — Done
+- OpenRouter pricing cached in memory (1hr TTL) from models API
+- Token usage (input/output) captured from OpenRouter response
+- Per-translation estimated cost calculated and persisted in DB
+- Cost aggregation at novel level (total + per-model) in status overview
+- Costs displayed in: translation inventory, novel detail badges, library cards, reader model dropdown
+- EN/KO i18n keys for all cost labels
 
 ### V2.9 Live Updates and Progress Estimation
 - Push or poll job/translation state changes so pages update without reload
@@ -194,8 +196,7 @@ Last updated: 2026-04-10
 
 ## Remaining V2 Execution Order
 1. **V2.3 Durable Async Work** — replace inline queue with Redis-backed durable queue, add retry logic
-2. **V2.8 Cost Estimation and Observability** — attach pricing and cost rollups to the translation pipeline
-3. **V2.9 Live Updates and Progress Estimation** — SSE/WebSocket for real-time job and translation status
+2. **V2.9 Live Updates and Progress Estimation** — SSE/WebSocket for real-time job and translation status
 
 ## Completed V2 Phases
 - V2.1 Baseline Stabilization ✅
@@ -204,3 +205,4 @@ Last updated: 2026-04-10
 - V2.5 Library and Novel Status Overview ✅
 - V2.6 Translation Inventory and Control ✅
 - V2.7 Model Visibility and Quick Switching ✅
+- V2.8 Cost Estimation and Observability ✅
