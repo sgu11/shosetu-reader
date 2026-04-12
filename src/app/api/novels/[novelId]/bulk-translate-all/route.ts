@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { eq, and, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { episodes } from "@/lib/db/schema";
-import { getJobQueue } from "@/modules/jobs/application/job-queue";
-import type { BulkTranslateAllJobPayload } from "@/modules/jobs/application/job-handlers";
-import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
 import { rateLimit } from "@/lib/rate-limit";
 import { isValidUuid } from "@/lib/validation";
+import { createTranslationSession } from "@/modules/translation/application/translation-sessions";
 
 // 1 bulk-translate-all request per minute per IP
 const RATE_LIMIT = { limit: 1, windowSeconds: 60 };
@@ -15,7 +13,8 @@ const RATE_LIMIT = { limit: 1, windowSeconds: 60 };
  * POST /api/novels/:novelId/bulk-translate-all
  *
  * Discovers all fetched episodes without a Korean translation
- * and fires off translation requests in the background.
+ * and creates a translation session that processes them sequentially
+ * with context chaining between episodes.
  * Returns immediately with 202.
  */
 export async function POST(
@@ -55,30 +54,16 @@ export async function POST(
   }
 
   const total = untranslated.length;
-  const jobQueue = getJobQueue();
-  const ownerUserId = await resolveUserId();
-  const payload: BulkTranslateAllJobPayload = {
-    novelId,
-    episodeIds: untranslated.map((episode) => episode.id),
-    ownerUserId,
-  };
+  const episodeIds = untranslated.map((episode) => episode.id);
 
-  const job = await jobQueue.enqueue(
-    "translation.bulk-translate-all",
-    payload,
-    {
-      entityType: "novel",
-      entityId: novelId,
-    },
-  );
+  const { sessionId } = await createTranslationSession(novelId, episodeIds);
 
   return NextResponse.json(
     {
       novelId,
       total,
-      jobId: job.id,
-      runner: job.runner,
-      message: "Translating all untranslated episodes in background",
+      sessionId,
+      message: "Translation session created — episodes will be translated sequentially with context chaining",
     },
     { status: 202 },
   );

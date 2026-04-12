@@ -1,5 +1,7 @@
 import {
+  boolean,
   integer,
+  jsonb,
   pgTable,
   real,
   text,
@@ -7,7 +9,13 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { contentLanguageEnum, translationStatusEnum } from "./enums";
+import {
+  contentLanguageEnum,
+  glossaryEntryCategoryEnum,
+  glossaryEntryStatusEnum,
+  sessionStatusEnum,
+  translationStatusEnum,
+} from "./enums";
 import { episodes } from "./episodes";
 import { users } from "./users";
 import { novels } from "./novels";
@@ -36,6 +44,12 @@ export const translations = pgTable(
     durationMs: integer("duration_ms"),
     errorCode: text("error_code"),
     errorMessage: text("error_message"),
+    promptFingerprint: text("prompt_fingerprint"),
+    qualityWarnings: jsonb("quality_warnings"),
+    sessionId: uuid("session_id"),
+    contextSummaryUsed: text("context_summary_used"),
+    chunkCount: integer("chunk_count"),
+    isCanonical: boolean("is_canonical").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),
@@ -64,6 +78,23 @@ export const translationSettings = pgTable("translation_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const translationSessions = pgTable("translation_sessions", {
+  id: uuid().primaryKey().defaultRandom(),
+  novelId: uuid("novel_id")
+    .notNull()
+    .references(() => novels.id, { onDelete: "cascade" }),
+  status: sessionStatusEnum().notNull().default("active"),
+  modelName: text("model_name").notNull(),
+  glossaryVersion: integer("glossary_version").notNull().default(1),
+  promptFingerprint: text("prompt_fingerprint"),
+  contextSummary: text("context_summary"),
+  lastEpisodeNumber: integer("last_episode_number"),
+  episodeCount: integer("episode_count").notNull().default(0),
+  totalCostUsd: real("total_cost_usd").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const novelGlossaries = pgTable("novel_glossaries", {
   id: uuid().primaryKey().defaultRandom(),
   novelId: uuid("novel_id")
@@ -71,9 +102,38 @@ export const novelGlossaries = pgTable("novel_glossaries", {
     .unique()
     .references(() => novels.id, { onDelete: "cascade" }),
   glossary: text("glossary").notNull().default(""),
+  glossaryVersion: integer("glossary_version").notNull().default(1),
   modelName: text("model_name"),
   episodeCount: integer("episode_count"),
   generatedAt: timestamp("generated_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const novelGlossaryEntries = pgTable(
+  "novel_glossary_entries",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    novelId: uuid("novel_id")
+      .notNull()
+      .references(() => novels.id, { onDelete: "cascade" }),
+    termJa: text("term_ja").notNull(),
+    termKo: text("term_ko").notNull(),
+    reading: text("reading"),
+    category: glossaryEntryCategoryEnum().notNull(),
+    notes: text("notes"),
+    sourceEpisodeNumber: integer("source_episode_number"),
+    status: glossaryEntryStatusEnum().notNull().default("suggested"),
+    confidence: real("confidence"),
+    provenanceTranslationId: uuid("provenance_translation_id"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("novel_glossary_entries_unique_idx").on(
+      table.novelId,
+      table.termJa,
+      table.category,
+    ),
+  ],
+);

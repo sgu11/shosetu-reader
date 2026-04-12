@@ -144,6 +144,7 @@ export async function getReaderPayload(
           provider: translation.provider,
           modelName: translation.modelName,
           errorMessage: translation.errorMessage,
+          hasWarnings: Array.isArray(translation.qualityWarnings) && translation.qualityWarnings.length > 0,
         }
       : null,
     translations: allTranslations

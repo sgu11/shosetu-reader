@@ -38,3 +38,27 @@ export const jobStatusEnum = pgEnum("job_status", [
   "completed",
   "failed",
 ]);
+
+// --- Translation sessions ---
+
+export const sessionStatusEnum = pgEnum("session_status", [
+  "active",
+  "completed",
+  "cancelled",
+]);
+
+// --- Glossary ---
+
+export const glossaryEntryStatusEnum = pgEnum("glossary_entry_status", [
+  "confirmed",
+  "suggested",
+  "rejected",
+]);
+
+export const glossaryEntryCategoryEnum = pgEnum("glossary_entry_category", [
+  "character",
+  "place",
+  "term",
+  "skill",
+  "honorific",
+]);

@@ -23,6 +23,7 @@ describe("readerPayloadSchema", () => {
         provider: "openrouter",
         modelName: "google/gemini-2.5-flash-lite",
         errorMessage: null,
+        hasWarnings: false,
       },
       translations: [
         {

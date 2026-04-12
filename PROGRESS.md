@@ -1,6 +1,6 @@
 # PROGRESS.md
 
-Last updated: 2026-04-11
+Last updated: 2026-04-12
 
 ---
 
@@ -27,9 +27,9 @@ Last updated: 2026-04-11
 | Register novel via URL or ncode | Done | POST /api/novels/register |
 | Read ingested Japanese episodes | Done | Reader with configurable fonts, prev/next nav |
 | Subscriptions and continue-reading | Done | Subscribe/unsubscribe, resume reading with scroll/language/progress restoration |
-| Korean translation request and read | Done | Translation pipeline with model selection, retry, discard, inventory. Inline queue (Redis upgrade planned) |
+| Korean translation request and read | Done | Translation pipeline with model selection, retry, discard, inventory, and Redis-backed durable queue |
 | UI supports English and Korean | Done | EN/KR dictionaries, locale switcher, cookie persistence |
-| System runs with PostgreSQL and Redis, Docker-ready | Partial | PostgreSQL + Docker done, Redis deferred |
+| System runs with PostgreSQL and Redis, Docker-ready | Done | PostgreSQL, Redis worker, and Docker Compose are in place |
 
 ---
 
@@ -106,7 +106,7 @@ Last updated: 2026-04-11
 - **Reader font settings**: stored in per-device cookie (`reader-prefs`, 1-year expiry), not in database — allows different settings per device
 - **Translation model**: configurable via Settings page with OpenRouter model picker
 - **Per-novel prompts**: custom translation instructions per novel (character names, tone)
-- **Bulk operations**: "Ingest all" and "Translate all" run via inline job queue with DB-persisted progress (Redis upgrade planned)
+- **Bulk operations**: "Ingest all" and "Translate all" run via Redis-backed durable jobs with DB-persisted progress
 - **Multi-user**: Profile-based user scoping with guest data migration; session auth scaffolded
 - **Reader resume**: Scroll anchor + percent-based restoration with language persistence
 - **Rate limiting**: API endpoints rate-limited, with user-facing alert for translation rate limits
@@ -217,3 +217,49 @@ Last updated: 2026-04-11
 - V2.8 Cost Estimation and Observability ✅
 - V2.9 Live Updates and Progress Estimation ✅
 - V2.10 Follow-on Work ✅
+
+---
+
+## V3 — Translation Quality & Context
+
+Full spec: [`docs/v3-architecture.md`](docs/v3-architecture.md)
+
+V3 addresses three structural weaknesses: static glossaries, isolated episode
+translation, and unoptimized API usage. The goal is higher translation quality
+and lower cost per episode.
+
+### V3 Scope
+
+1. **Structured glossary with living updates** — Replace the free-text markdown
+   glossary with a structured term table (character names, places, skills) plus
+   a separate style guide. Auto-extract new terms after each episode translation.
+   Glossary entries remain shared novel-wide across all profiles.
+2. **Translation sessions with context chaining** — Bulk translations carry a
+   rolling summary forward so the model maintains character, plot, and tone
+   consistency across episodes.
+3. **Prompt caching & request optimization** — Restructure prompts for maximum
+   cache-hit rates. Optimize first for Gemini on OpenRouter while keeping room
+   for alternate models. Chunk long episodes intelligently. Adaptive token
+   limits.
+4. **Post-translation quality validation** — Automated checks for empty output,
+   length anomalies, untranslated segments, and glossary compliance.
+
+### V3 Phases
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| V3.1 | Structured Glossary Foundation | Planned |
+| V3.2 | Post-Translation Glossary Extraction | Planned |
+| V3.3 | Translation Sessions & Context Chaining | Planned |
+| V3.4 | Prompt Caching & Request Optimization | Planned |
+| V3.5 | Quality Validation & Observability | Planned |
+
+### V3 Key Architectural Decisions
+- `novel_glossary_entries` table with per-term CRUD, category, status (confirmed/suggested/rejected)
+- `translation_sessions` table grouping sequential bulk translations with rolling context summary
+- Post-translation `glossary.extract` background job for auto-term extraction
+- `translation.session-summary` background job for rolling context generation
+- Multi-message prompt structure: system (cached) → context (per-session) → source (per-episode)
+- Episode chunking at paragraph boundaries with overlap context for long episodes
+- `quality_warnings` JSONB column on translations for automated defect detection
+- `promptVersion` bumped to `"v3"` for session-based translations only

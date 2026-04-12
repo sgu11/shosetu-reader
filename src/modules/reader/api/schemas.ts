@@ -24,6 +24,7 @@ export const readerPayloadSchema = z.object({
       provider: z.string().nullable(),
       modelName: z.string().nullable(),
       errorMessage: z.string().nullable(),
+      hasWarnings: z.boolean(),
     })
     .nullable(),
   translations: z.array(

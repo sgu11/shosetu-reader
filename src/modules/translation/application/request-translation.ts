@@ -1,11 +1,15 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { episodes, translations, translationSettings, novelGlossaries } from "@/lib/db/schema";
+import { episodes, translations, translationSettings, novelGlossaries, novelGlossaryEntries } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
 import { getJobQueue } from "@/modules/jobs/application/job-queue";
 import { OpenRouterProvider } from "../infra/openrouter-provider";
 import { estimateCost } from "./cost-estimation";
+import { splitIntoChunks, reassembleChunks } from "./chunk-episode";
+import { computePromptFingerprint } from "./prompt-fingerprint";
+import { validateTranslation } from "./quality-validation";
+import { renderGlossaryPrompt } from "./render-glossary-prompt";
 
 const PROMPT_VERSION = "v2";
 
@@ -19,6 +23,10 @@ export interface TranslationJobPayload {
   modelName: string;
   globalPrompt: string;
   glossary: string;
+  promptFingerprint: string;
+  /** Present when translating inside a session */
+  sessionId?: string;
+  contextSummary?: string;
 }
 
 /**
@@ -38,16 +46,41 @@ async function loadTranslationContext(novelId: string) {
     .limit(1);
 
   const [glossaryRow] = await db
-    .select({ glossary: novelGlossaries.glossary })
+    .select({
+      glossary: novelGlossaries.glossary,
+      glossaryVersion: novelGlossaries.glossaryVersion,
+    })
     .from(novelGlossaries)
     .where(eq(novelGlossaries.novelId, novelId))
     .limit(1);
+
+  // Load confirmed structured glossary entries
+  const confirmedEntries = await db
+    .select({
+      termJa: novelGlossaryEntries.termJa,
+      termKo: novelGlossaryEntries.termKo,
+      reading: novelGlossaryEntries.reading,
+      category: novelGlossaryEntries.category,
+      notes: novelGlossaryEntries.notes,
+    })
+    .from(novelGlossaryEntries)
+    .where(
+      and(
+        eq(novelGlossaryEntries.novelId, novelId),
+        eq(novelGlossaryEntries.status, "confirmed"),
+      ),
+    )
+    .orderBy(asc(novelGlossaryEntries.category), asc(novelGlossaryEntries.termJa));
+
+  const styleGuide = glossaryRow?.glossary ?? "";
+  const glossaryPrompt = renderGlossaryPrompt(confirmedEntries, styleGuide);
 
   return {
     userId,
     modelName: settings?.modelName ?? env.OPENROUTER_DEFAULT_MODEL,
     globalPrompt: settings?.globalPrompt ?? "",
-    glossary: glossaryRow?.glossary ?? "",
+    glossary: glossaryPrompt,
+    glossaryVersion: glossaryRow?.glossaryVersion ?? 1,
   };
 }
 
@@ -82,12 +115,24 @@ export async function requestTranslation(
   // Load translation context (model, global prompt, novel prompt)
   const ctx = await loadTranslationContext(episode.novelId);
 
+  const effectiveModel = modelOverride ?? ctx.modelName;
+
   const provider = new OpenRouterProvider(
     env.OPENROUTER_API_KEY ?? "",
-    modelOverride ?? ctx.modelName,
+    effectiveModel,
     ctx.globalPrompt,
     ctx.glossary,
   );
+
+  const fingerprint = computePromptFingerprint({
+    provider: provider.provider,
+    modelName: provider.modelName,
+    promptVersion: PROMPT_VERSION,
+    globalPrompt: ctx.globalPrompt,
+    styleGuide: ctx.glossary,
+    glossaryVersion: ctx.glossaryVersion,
+    sessionMode: false,
+  });
 
   // Check for existing translation with same identity
   const [existing] = await db
@@ -131,6 +176,7 @@ export async function requestTranslation(
         modelName: provider.modelName,
         globalPrompt: ctx.globalPrompt,
         glossary: ctx.glossary,
+        promptFingerprint: fingerprint,
       });
 
       return { translationId: existing.id, status: "queued" };
@@ -149,6 +195,7 @@ export async function requestTranslation(
       modelName: provider.modelName,
       promptVersion: PROMPT_VERSION,
       sourceChecksum,
+      promptFingerprint: fingerprint,
       status: "queued",
     })
     .onConflictDoNothing()
@@ -183,6 +230,7 @@ export async function requestTranslation(
     modelName: provider.modelName,
     globalPrompt: ctx.globalPrompt,
     glossary: ctx.glossary,
+    promptFingerprint: fingerprint,
   });
 
   return { translationId: row.id, status: "queued" };
@@ -224,13 +272,14 @@ export async function processQueuedTranslation(
     return;
   }
 
-  // Mark as processing
+  // Mark as processing, store session context if present
   await db
     .update(translations)
     .set({
       status: "processing",
       processingStartedAt: new Date(),
       durationMs: null,
+      contextSummaryUsed: payload.contextSummary ?? null,
       updatedAt: new Date(),
     })
     .where(eq(translations.id, payload.translationId));
@@ -238,24 +287,80 @@ export async function processQueuedTranslation(
   const providerStartTime = Date.now();
 
   try {
-    const result = await provider.translate({
-      sourceText: payload.sourceText,
-      sourceLanguage: "ja",
-      targetLanguage: "ko",
-    });
+    const chunks = splitIntoChunks(payload.sourceText);
+    const isChunked = chunks.length > 1;
 
-    const costUsd = (result.inputTokens != null && result.outputTokens != null)
-      ? await estimateCost(provider.modelName, result.inputTokens, result.outputTokens)
+    let finalTranslatedText: string;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let hasTokenInfo = true;
+
+    if (!isChunked) {
+      // Single-pass translation (original path)
+      const result = await provider.translate({
+        sourceText: payload.sourceText,
+        sourceLanguage: "ja",
+        targetLanguage: "ko",
+      }, payload.contextSummary);
+
+      finalTranslatedText = result.translatedText;
+      if (result.inputTokens != null && result.outputTokens != null) {
+        totalInputTokens = result.inputTokens;
+        totalOutputTokens = result.outputTokens;
+      } else {
+        hasTokenInfo = false;
+      }
+    } else {
+      // Chunked translation: translate sequentially with continuity context
+      const translatedChunks: string[] = [];
+      let previousTail: string | undefined;
+
+      for (const chunk of chunks) {
+        const result = await provider.translate({
+          sourceText: chunk.text,
+          sourceLanguage: "ja",
+          targetLanguage: "ko",
+          previousChunkTranslation: previousTail,
+          chunkLabel: `${chunk.index + 1}/${chunk.total}`,
+        }, chunk.index === 0 ? payload.contextSummary : undefined);
+
+        translatedChunks.push(result.translatedText);
+
+        // Keep tail of this chunk's translation for next chunk's context
+        previousTail = result.translatedText.slice(-500);
+
+        if (result.inputTokens != null && result.outputTokens != null) {
+          totalInputTokens += result.inputTokens;
+          totalOutputTokens += result.outputTokens;
+        } else {
+          hasTokenInfo = false;
+        }
+      }
+
+      finalTranslatedText = reassembleChunks(translatedChunks);
+    }
+
+    const costUsd = hasTokenInfo
+      ? await estimateCost(provider.modelName, totalInputTokens, totalOutputTokens)
       : null;
+
+    // Run quality validation checks
+    const qualityWarnings = validateTranslation({
+      sourceText: payload.sourceText,
+      translatedText: finalTranslatedText,
+      chunkCount: isChunked ? chunks.length : null,
+    });
 
     await db
       .update(translations)
       .set({
         status: "available",
-        translatedText: result.translatedText,
-        inputTokens: result.inputTokens ?? null,
-        outputTokens: result.outputTokens ?? null,
+        translatedText: finalTranslatedText,
+        inputTokens: hasTokenInfo ? totalInputTokens : null,
+        outputTokens: hasTokenInfo ? totalOutputTokens : null,
         estimatedCostUsd: costUsd,
+        chunkCount: isChunked ? chunks.length : null,
+        qualityWarnings: qualityWarnings.length > 0 ? qualityWarnings : null,
         durationMs: providerStartTime
           ? Date.now() - providerStartTime
           : null,
@@ -265,6 +370,30 @@ export async function processQueuedTranslation(
         updatedAt: new Date(),
       })
       .where(eq(translations.id, payload.translationId));
+
+    // After successful translation, enqueue glossary extraction
+    try {
+      const [ep] = await db
+        .select({ episodeNumber: episodes.episodeNumber })
+        .from(episodes)
+        .where(eq(episodes.id, payload.episodeId))
+        .limit(1);
+      if (ep) {
+        const jobQueue = getJobQueue();
+        await jobQueue.enqueue("glossary.extract", {
+          novelId: payload.novelId,
+          episodeId: payload.episodeId,
+          episodeNumber: ep.episodeNumber,
+          translationId: payload.translationId,
+        }, {
+          entityType: "episode",
+          entityId: payload.episodeId,
+        });
+      }
+    } catch (extractErr) {
+      // Non-fatal: don't fail the translation if extraction enqueue fails
+      console.error("Failed to enqueue glossary extraction:", extractErr);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
 
@@ -283,4 +412,14 @@ export async function processQueuedTranslation(
 
     throw err;
   }
+}
+
+/**
+ * Enqueue a translation job for a session-managed episode.
+ * The translation row is already created by advanceSession.
+ */
+export async function requestTranslationInSession(
+  payload: TranslationJobPayload,
+) {
+  await enqueueTranslationJob(payload);
 }

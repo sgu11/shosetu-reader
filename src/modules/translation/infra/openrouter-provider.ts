@@ -18,6 +18,7 @@ export class OpenRouterProvider implements TranslationProvider {
   readonly modelName: string;
   private apiKey: string;
   private globalPrompt: string;
+  /** Combined glossary prompt: structured entries table + style guide text */
   private glossary: string;
 
   constructor(
@@ -32,7 +33,7 @@ export class OpenRouterProvider implements TranslationProvider {
     this.glossary = glossary ?? "";
   }
 
-  private buildSystemPrompt(): string {
+  buildSystemPrompt(): string {
     const parts = [BASE_SYSTEM_PROMPT];
 
     if (this.globalPrompt.trim()) {
@@ -40,15 +41,58 @@ export class OpenRouterProvider implements TranslationProvider {
     }
 
     if (this.glossary.trim()) {
-      parts.push(`\nGlossary & translation reference:\n${this.glossary.trim()}`);
+      parts.push(`\n${this.glossary.trim()}`);
     }
 
     return parts.join("\n");
   }
 
-  async translate(request: TranslationRequest): Promise<TranslationResult> {
+  async translate(request: TranslationRequest, contextSummary?: string): Promise<TranslationResult> {
     const MAX_RETRIES = 3;
     const RETRYABLE = new Set([429, 502, 503, 504]);
+
+    // Build messages: system (stable/cacheable) → context (per-session) → source (per-episode)
+    const messages: Array<{ role: string; content: string }> = [
+      { role: "system", content: this.buildSystemPrompt() },
+    ];
+
+    if (contextSummary?.trim()) {
+      messages.push({
+        role: "user",
+        content: `Story context from previous episodes:\n\n${contextSummary.trim()}`,
+      });
+      messages.push({
+        role: "assistant",
+        content: "Understood. I will use this context to maintain consistency in the translation.",
+      });
+    }
+
+    // Chunk continuity context: inject previous chunk's translated tail
+    if (request.previousChunkTranslation?.trim()) {
+      messages.push({
+        role: "user",
+        content: `This is a continuation (chunk ${request.chunkLabel ?? ""}). The previous chunk's translation ended with:\n\n${request.previousChunkTranslation.trim()}`,
+      });
+      messages.push({
+        role: "assistant",
+        content: "Understood. I will continue the translation seamlessly from where the previous chunk ended.",
+      });
+    }
+
+    const chunkNote = request.chunkLabel
+      ? ` (chunk ${request.chunkLabel})`
+      : "";
+    messages.push({
+      role: "user",
+      content: `Translate the following Japanese text to Korean${chunkNote}:\n\n${request.sourceText}`,
+    });
+
+    // Adaptive max_tokens: ~1.5x expansion ratio, ~3 chars/token for Korean
+    const sourceChars = request.sourceText.length;
+    const adaptiveMaxTokens = Math.min(
+      Math.max(Math.ceil((sourceChars * 1.5) / 3) + 512, 2048),
+      16384,
+    );
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -61,15 +105,9 @@ export class OpenRouterProvider implements TranslationProvider {
         },
         body: JSON.stringify({
           model: this.modelName,
-          messages: [
-            { role: "system", content: this.buildSystemPrompt() },
-            {
-              role: "user",
-              content: `Translate the following Japanese text to Korean:\n\n${request.sourceText}`,
-            },
-          ],
+          messages,
           temperature: 0.3,
-          max_tokens: 8192,
+          max_tokens: adaptiveMaxTokens,
         }),
       });
 
