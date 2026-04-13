@@ -6,6 +6,8 @@ export interface TranslationRequest {
   previousChunkTranslation?: string;
   /** Chunk label, e.g. "2/5" — indicates this is part of a larger text */
   chunkLabel?: string;
+  /** When true, this is an author's preface/afterword — not story content */
+  isAuthorNote?: boolean;
 }
 
 export interface TranslationResult {

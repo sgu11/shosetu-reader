@@ -136,11 +136,15 @@ export async function getReaderPayload(
       titleJa: episode.titleJa,
       titleKo,
       sourceTextJa: episode.normalizedTextJa,
+      prefaceJa: episode.prefaceJa ?? null,
+      afterwordJa: episode.afterwordJa ?? null,
     },
     translation: translation
       ? {
           status: translation.status,
           translatedText: translation.translatedText,
+          translatedPreface: translation.translatedPreface ?? null,
+          translatedAfterword: translation.translatedAfterword ?? null,
           provider: translation.provider,
           modelName: translation.modelName,
           errorMessage: translation.errorMessage,

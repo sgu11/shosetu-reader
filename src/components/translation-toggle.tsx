@@ -8,6 +8,8 @@ import type { TranslationKey } from "@/lib/i18n";
 interface TranslationState {
   status: "not_requested" | "queued" | "processing" | "available" | "failed";
   translatedText: string | null;
+  translatedPreface: string | null;
+  translatedAfterword: string | null;
   modelName: string | null;
   errorMessage: string | null;
 }
@@ -80,7 +82,7 @@ export function TranslationToggle({
     initialLanguage === "ko" && initialTranslation?.status === "available" ? "ko" : "ja",
   );
   const [translation, setTranslation] = useState<TranslationState>(
-    initialTranslation ?? { status: "not_requested", translatedText: null, modelName: null, errorMessage: null },
+    initialTranslation ?? { status: "not_requested", translatedText: null, translatedPreface: null, translatedAfterword: null, modelName: null, errorMessage: null },
   );
   const [available, setAvailable] = useState<AvailableTranslation[]>(initialAvailable);
   const [pendingTranslation, setPendingTranslation] = useState<PendingTranslation | null>(
@@ -121,6 +123,8 @@ export function TranslationToggle({
       setTranslation({
         status: data.status,
         translatedText: data.translatedText,
+        translatedPreface: data.translatedPreface ?? null,
+        translatedAfterword: data.translatedAfterword ?? null,
         modelName: data.modelName,
         errorMessage: data.errorMessage ?? null,
       });
@@ -244,6 +248,8 @@ export function TranslationToggle({
       setTranslation({
         status: "available",
         translatedText: record.translatedText,
+        translatedPreface: record.translatedPreface ?? null,
+        translatedAfterword: record.translatedAfterword ?? null,
         modelName: record.modelName,
         errorMessage: null,
       });
@@ -300,6 +306,25 @@ export function TranslationToggle({
       while (readerEl.firstChild) {
         readerEl.removeChild(readerEl.firstChild);
       }
+
+      // Render translated preface with divider
+      if (translation.translatedPreface) {
+        const prefaceDiv = document.createElement("div");
+        prefaceDiv.dataset.section = "preface";
+        prefaceDiv.className = "text-muted/80";
+        for (const line of translation.translatedPreface.split("\n")) {
+          const p = document.createElement("p");
+          if (line.trim() === "") p.className = "h-6";
+          p.textContent = line;
+          prefaceDiv.appendChild(p);
+        }
+        readerEl.appendChild(prefaceDiv);
+        const hr = document.createElement("hr");
+        hr.className = "my-8 border-border/50";
+        readerEl.appendChild(hr);
+      }
+
+      // Render translated body
       const paragraphs = translation.translatedText.split("\n");
       for (const [index, line] of paragraphs.entries()) {
         const p = document.createElement("p");
@@ -310,13 +335,31 @@ export function TranslationToggle({
         p.textContent = line;
         readerEl.appendChild(p);
       }
+
+      // Render translated afterword with divider
+      if (translation.translatedAfterword) {
+        const hr = document.createElement("hr");
+        hr.className = "my-8 border-border/50";
+        readerEl.appendChild(hr);
+        const afterwordDiv = document.createElement("div");
+        afterwordDiv.dataset.section = "afterword";
+        afterwordDiv.className = "text-muted/80";
+        for (const line of translation.translatedAfterword.split("\n")) {
+          const p = document.createElement("p");
+          if (line.trim() === "") p.className = "h-6";
+          p.textContent = line;
+          afterwordDiv.appendChild(p);
+        }
+        readerEl.appendChild(afterwordDiv);
+      }
+
       originalEl.classList.add("hidden");
       readerEl.classList.remove("hidden");
     } else {
       readerEl.classList.add("hidden");
       originalEl.classList.remove("hidden");
     }
-  }, [language, hasTranslation, translation.translatedText]);
+  }, [language, hasTranslation, translation.translatedText, translation.translatedPreface, translation.translatedAfterword]);
 
   // Models that differ from current — for re-translate suggestions
   const otherModels = available.filter((a) => a.modelName !== displayModel);

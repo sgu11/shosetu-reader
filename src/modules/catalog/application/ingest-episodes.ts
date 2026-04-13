@@ -96,6 +96,8 @@ export async function fetchAndPersistEpisode(episodeId: string): Promise<void> {
         rawHtmlChecksum: content.checksum,
         rawTextJa: content.normalizedText,
         normalizedTextJa: content.normalizedText,
+        prefaceJa: content.prefaceText,
+        afterwordJa: content.afterwordText,
         fetchStatus: "fetched",
         lastFetchedAt: new Date(),
         updatedAt: new Date(),

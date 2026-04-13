@@ -27,6 +27,10 @@ export interface TranslationJobPayload {
   /** Present when translating inside a session */
   sessionId?: string;
   contextSummary?: string;
+  /** Author preface — translated separately to avoid context contamination */
+  prefaceText?: string;
+  /** Author afterword — translated separately to avoid context contamination */
+  afterwordText?: string;
 }
 
 /**
@@ -178,6 +182,8 @@ export async function requestTranslation(
         globalPrompt: ctx.globalPrompt,
         glossary: ctx.glossary,
         promptFingerprint: fingerprint,
+        prefaceText: episode.prefaceJa ?? undefined,
+        afterwordText: episode.afterwordJa ?? undefined,
       });
 
       return { translationId: existing.id, status: "queued" };
@@ -232,6 +238,8 @@ export async function requestTranslation(
     globalPrompt: ctx.globalPrompt,
     glossary: ctx.glossary,
     promptFingerprint: fingerprint,
+    prefaceText: episode.prefaceJa ?? undefined,
+    afterwordText: episode.afterwordJa ?? undefined,
   });
 
   return { translationId: row.id, status: "queued" };
@@ -344,6 +352,38 @@ export async function processQueuedTranslation(
       finalTranslatedText = reassembleChunks(translatedChunks);
     }
 
+    // Translate preface/afterword separately (author notes, not story content)
+    let translatedPreface: string | null = null;
+    let translatedAfterword: string | null = null;
+
+    if (payload.prefaceText?.trim()) {
+      const prefaceResult = await provider.translate({
+        sourceText: payload.prefaceText,
+        sourceLanguage: "ja",
+        targetLanguage: "ko",
+        isAuthorNote: true,
+      });
+      translatedPreface = prefaceResult.translatedText;
+      if (prefaceResult.inputTokens != null && prefaceResult.outputTokens != null) {
+        totalInputTokens += prefaceResult.inputTokens;
+        totalOutputTokens += prefaceResult.outputTokens;
+      }
+    }
+
+    if (payload.afterwordText?.trim()) {
+      const afterwordResult = await provider.translate({
+        sourceText: payload.afterwordText,
+        sourceLanguage: "ja",
+        targetLanguage: "ko",
+        isAuthorNote: true,
+      });
+      translatedAfterword = afterwordResult.translatedText;
+      if (afterwordResult.inputTokens != null && afterwordResult.outputTokens != null) {
+        totalInputTokens += afterwordResult.inputTokens;
+        totalOutputTokens += afterwordResult.outputTokens;
+      }
+    }
+
     const costUsd = hasTokenInfo
       ? await estimateCost(provider.modelName, totalInputTokens, totalOutputTokens)
       : null;
@@ -383,6 +423,8 @@ export async function processQueuedTranslation(
       .set({
         status: "available",
         translatedText: finalTranslatedText,
+        translatedPreface: translatedPreface,
+        translatedAfterword: translatedAfterword,
         inputTokens: hasTokenInfo ? totalInputTokens : null,
         outputTokens: hasTokenInfo ? totalOutputTokens : null,
         estimatedCostUsd: costUsd,

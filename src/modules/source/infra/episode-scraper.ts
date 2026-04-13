@@ -27,6 +27,10 @@ export interface EpisodeContent {
   rawHtml: string;
   normalizedText: string;
   checksum: string;
+  /** Author preface (前書き) — null when absent */
+  prefaceText: string | null;
+  /** Author afterword (後書き) — null when absent */
+  afterwordText: string | null;
 }
 
 /**
@@ -117,26 +121,69 @@ export function parseToc(html: string, ncode: string): TocEntry[] {
   return entries;
 }
 
+/**
+ * Extract paragraph text from a container element.
+ * Collects all <p> children and returns their text joined by newlines,
+ * or null when the container doesn't exist.
+ */
+function extractSection(
+  $: cheerio.CheerioAPI,
+  selector: string,
+): { text: string | null; html: string | null } {
+  const container = $(selector).first();
+  if (container.length === 0) return { text: null, html: null };
+
+  const lines: string[] = [];
+  container.find("p").each((_i, el) => {
+    lines.push($(el).text());
+  });
+
+  if (lines.length === 0) return { text: null, html: null };
+
+  const text = lines.join("\n");
+  const html = container.find("p").map((_i, el) => $.html(el)).get().join("\n");
+
+  return { text, html };
+}
+
 export function parseEpisodePage(html: string): EpisodeContent {
   const $ = cheerio.load(html);
 
   const title = $("h1.p-novel__title").first().text().trim();
 
-  // Collect body paragraphs (id="L1", "L2", etc.)
+  // Preface: <div class="p-novel__text--preface">
+  const preface = extractSection($, ".p-novel__text--preface");
+
+  // Body: <div class="p-novel__text"> that is NOT preface/afterword.
+  // Select the text div without modifier classes.
+  const bodyContainer = $(".p-novel__text")
+    .not(".p-novel__text--preface")
+    .not(".p-novel__text--afterword")
+    .first();
+
   const paragraphs: string[] = [];
-  $('p[id^="L"]').each((_i, el) => {
+  bodyContainer.find("p").each((_i, el) => {
     paragraphs.push($(el).text());
   });
 
-  const rawHtml = $('p[id^="L"]')
+  const rawHtml = bodyContainer
+    .find("p")
     .map((_i, el) => $.html(el))
     .get()
     .join("\n");
 
   const normalizedText = paragraphs.join("\n");
 
+  // Afterword: <div class="p-novel__text--afterword">
+  const afterword = extractSection($, ".p-novel__text--afterword");
+
+  // Checksum covers all sections for change detection
+  const checksumInput = [preface.text, normalizedText, afterword.text]
+    .filter(Boolean)
+    .join("\n---\n");
+
   const checksum = createHash("sha256")
-    .update(normalizedText)
+    .update(checksumInput)
     .digest("hex")
     .slice(0, 16);
 
@@ -145,5 +192,7 @@ export function parseEpisodePage(html: string): EpisodeContent {
     rawHtml,
     normalizedText,
     checksum,
+    prefaceText: preface.text,
+    afterwordText: afterword.text,
   };
 }

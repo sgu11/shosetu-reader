@@ -16,11 +16,15 @@ export const readerPayloadSchema = z.object({
     titleJa: z.string().nullable(),
     titleKo: z.string().nullable(),
     sourceTextJa: z.string().nullable(),
+    prefaceJa: z.string().nullable(),
+    afterwordJa: z.string().nullable(),
   }),
   translation: z
     .object({
       status: z.enum(["queued", "processing", "available", "failed"]),
       translatedText: z.string().nullable(),
+      translatedPreface: z.string().nullable(),
+      translatedAfterword: z.string().nullable(),
       provider: z.string().nullable(),
       modelName: z.string().nullable(),
       errorMessage: z.string().nullable(),

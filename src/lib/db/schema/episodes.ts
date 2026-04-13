@@ -25,6 +25,8 @@ export const episodes = pgTable(
     rawHtmlChecksum: text("raw_html_checksum"),
     rawTextJa: text("raw_text_ja"),
     normalizedTextJa: text("normalized_text_ja"),
+    prefaceJa: text("preface_ja"),
+    afterwordJa: text("afterword_ja"),
     fetchStatus: fetchStatusEnum("fetch_status").notNull().default("pending"),
     lastFetchedAt: timestamp("last_fetched_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

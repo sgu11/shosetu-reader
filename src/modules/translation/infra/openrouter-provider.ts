@@ -82,9 +82,12 @@ export class OpenRouterProvider implements TranslationProvider {
     const chunkNote = request.chunkLabel
       ? ` (chunk ${request.chunkLabel})`
       : "";
+    const authorNotePrefix = request.isAuthorNote
+      ? "This is the author's note (前書き/後書き), not story content. Translate it as an author's note.\n\n"
+      : "";
     messages.push({
       role: "user",
-      content: `Translate the following Japanese text to Korean${chunkNote}:\n\n${request.sourceText}`,
+      content: `${authorNotePrefix}Translate the following Japanese text to Korean${chunkNote}:\n\n${request.sourceText}`,
     });
 
     // Adaptive max_tokens: ~1.5x expansion ratio, ~2 chars/token for Korean

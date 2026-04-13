@@ -14,6 +14,8 @@ export const translationRecordSchema = z.object({
   id: z.string().uuid(),
   status: z.enum(["queued", "processing", "available", "failed"]),
   translatedText: z.string().nullable(),
+  translatedPreface: z.string().nullable(),
+  translatedAfterword: z.string().nullable(),
   provider: z.string().nullable(),
   modelName: z.string(),
   errorMessage: z.string().nullable(),
@@ -46,6 +48,8 @@ export const translationStatusResponseSchema = z.object({
   // The "active" translation — most recent available, or most recent in-progress/failed
   status: z.enum(["not_requested", "queued", "processing", "available", "failed"]),
   translatedText: z.string().nullable(),
+  translatedPreface: z.string().nullable(),
+  translatedAfterword: z.string().nullable(),
   provider: z.string().nullable(),
   modelName: z.string().nullable(),
   errorMessage: z.string().nullable(),

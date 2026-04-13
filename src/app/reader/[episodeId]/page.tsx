@@ -30,6 +30,10 @@ export default async function ReaderPage({ params }: Props) {
     progress,
   } = payload;
   const paragraphs = episode.sourceTextJa?.split("\n") ?? [];
+  const prefaceParagraphs = episode.prefaceJa?.split("\n") ?? [];
+  const afterwordParagraphs = episode.afterwordJa?.split("\n") ?? [];
+  const hasPreface = prefaceParagraphs.length > 0 && episode.prefaceJa;
+  const hasAfterword = afterwordParagraphs.length > 0 && episode.afterwordJa;
   const hasAvailableTranslation = translation?.status === "available";
   const initialReaderLanguage =
     progress?.currentLanguage ?? (locale === "ko" && hasAvailableTranslation ? "ko" : "ja");
@@ -38,6 +42,8 @@ export default async function ReaderPage({ params }: Props) {
     ? {
         status: translation.status as "queued" | "processing" | "available" | "failed",
         translatedText: translation.translatedText,
+        translatedPreface: translation.translatedPreface ?? null,
+        translatedAfterword: translation.translatedAfterword ?? null,
         modelName: translation.modelName,
         errorMessage: translation.errorMessage ?? null,
       }
@@ -128,6 +134,21 @@ export default async function ReaderPage({ params }: Props) {
               data-original-text
               className="reader-text space-y-1 tracking-wide text-secondary"
             >
+              {hasPreface && (
+                <>
+                  <div data-section="preface" className="text-muted/80">
+                    {prefaceParagraphs.map((line, i) => (
+                      <p
+                        key={`pf-${i}`}
+                        className={line.trim() === "" ? "h-6" : ""}
+                      >
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                  <hr className="my-8 border-border/50" />
+                </>
+              )}
               {paragraphs.map((line, i) => (
                 <p
                   key={i}
@@ -137,6 +158,21 @@ export default async function ReaderPage({ params }: Props) {
                   {line}
                 </p>
               ))}
+              {hasAfterword && (
+                <>
+                  <hr className="my-8 border-border/50" />
+                  <div data-section="afterword" className="text-muted/80">
+                    {afterwordParagraphs.map((line, i) => (
+                      <p
+                        key={`aw-${i}`}
+                        className={line.trim() === "" ? "h-6" : ""}
+                      >
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
             {/* Korean translation (populated by TranslationToggle) */}
             <div

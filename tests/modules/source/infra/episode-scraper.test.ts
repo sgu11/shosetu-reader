@@ -28,10 +28,50 @@ const SAMPLE_EPISODE_HTML = `
 <html>
 <body>
 <h1 class="p-novel__title p-novel__title--rensai">プロローグ</h1>
-<div id="novel_honbun">
+<div class="p-novel__body">
+<div class="js-novel-text p-novel__text">
   <p id="L1">　俺は34歳住所不定無職。</p>
   <p id="L2">　人生を後悔している真っ最中だ。</p>
   <p id="L3">　ただの引きこもりだった。</p>
+</div>
+</div>
+</body>
+</html>
+`;
+
+const SAMPLE_EPISODE_WITH_PREFACE_AND_AFTERWORD = `
+<html>
+<body>
+<h1 class="p-novel__title p-novel__title--rensai">特別編</h1>
+<div class="p-novel__body">
+<div class="js-novel-text p-novel__text p-novel__text--preface">
+  <p id="Lp1">　特賞のスペシャルブックレット用に書きおろし小説です。</p>
+  <p id="Lp2">　お楽しみください。</p>
+</div>
+<div class="js-novel-text p-novel__text">
+  <p id="L1">　物語の本文がここに始まる。</p>
+  <p id="L2">　主人公は旅に出た。</p>
+</div>
+<div class="js-novel-text p-novel__text p-novel__text--afterword">
+  <p id="La1">　活動報告も更新しましたので、そちらも確認してみて下さい。</p>
+</div>
+</div>
+</body>
+</html>
+`;
+
+const SAMPLE_EPISODE_WITH_AFTERWORD_ONLY = `
+<html>
+<body>
+<h1 class="p-novel__title p-novel__title--rensai">最終話</h1>
+<div class="p-novel__body">
+<div class="js-novel-text p-novel__text">
+  <p id="L1">　最後の一文。</p>
+</div>
+<div class="js-novel-text p-novel__text p-novel__text--afterword">
+  <p id="La1">- あとがき -</p>
+  <p id="La2">　ご愛読ありがとうございました。</p>
+</div>
 </div>
 </body>
 </html>
@@ -83,5 +123,55 @@ describe("parseEpisodePage", () => {
     const a = parseEpisodePage(SAMPLE_EPISODE_HTML);
     const b = parseEpisodePage(SAMPLE_EPISODE_HTML);
     expect(a.checksum).toBe(b.checksum);
+  });
+
+  it("returns null preface/afterword for body-only episodes", () => {
+    const content = parseEpisodePage(SAMPLE_EPISODE_HTML);
+    expect(content.prefaceText).toBeNull();
+    expect(content.afterwordText).toBeNull();
+  });
+
+  it("extracts preface and afterword when present", () => {
+    const content = parseEpisodePage(SAMPLE_EPISODE_WITH_PREFACE_AND_AFTERWORD);
+
+    expect(content.title).toBe("特別編");
+
+    // Body should contain only main text, not preface/afterword
+    expect(content.normalizedText).toContain("物語の本文がここに始まる。");
+    expect(content.normalizedText).toContain("主人公は旅に出た。");
+    expect(content.normalizedText).not.toContain("スペシャルブックレット");
+    expect(content.normalizedText).not.toContain("活動報告");
+
+    // Preface
+    expect(content.prefaceText).toContain("スペシャルブックレット");
+    expect(content.prefaceText).toContain("お楽しみください");
+
+    // Afterword
+    expect(content.afterwordText).toContain("活動報告");
+  });
+
+  it("handles afterword-only episodes", () => {
+    const content = parseEpisodePage(SAMPLE_EPISODE_WITH_AFTERWORD_ONLY);
+
+    expect(content.normalizedText).toBe("　最後の一文。");
+    expect(content.prefaceText).toBeNull();
+    expect(content.afterwordText).toContain("あとがき");
+    expect(content.afterwordText).toContain("ご愛読ありがとうございました");
+  });
+
+  it("does not mix preface/afterword paragraphs into body", () => {
+    const content = parseEpisodePage(SAMPLE_EPISODE_WITH_PREFACE_AND_AFTERWORD);
+    const bodyLines = content.normalizedText.split("\n");
+
+    // Body should have exactly 2 paragraphs
+    expect(bodyLines).toHaveLength(2);
+  });
+
+  it("includes preface/afterword in checksum", () => {
+    const withNotes = parseEpisodePage(SAMPLE_EPISODE_WITH_PREFACE_AND_AFTERWORD);
+    const bodyOnly = parseEpisodePage(SAMPLE_EPISODE_HTML);
+
+    // Different content should produce different checksums
+    expect(withNotes.checksum).not.toBe(bodyOnly.checksum);
   });
 });

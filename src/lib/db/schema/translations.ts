@@ -37,6 +37,8 @@ export const translations = pgTable(
     sourceChecksum: text("source_checksum").notNull(),
     status: translationStatusEnum().notNull().default("queued"),
     translatedText: text("translated_text"),
+    translatedPreface: text("translated_preface"),
+    translatedAfterword: text("translated_afterword"),
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),
     estimatedCostUsd: real("estimated_cost_usd"),
