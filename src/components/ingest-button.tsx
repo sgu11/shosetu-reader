@@ -172,6 +172,27 @@ export function IngestButton({ novelId }: Props) {
       }
     });
 
+  const handleReingestAll = () =>
+    run(async () => {
+      const confirmed = window.confirm(t("ingest.reingestConfirm"));
+      if (!confirmed) return;
+      const res = await fetch(`/api/novels/${novelId}/reingest-all`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setResult(typeof data.error === "string" ? data.error : t("ingest.requestFailed"));
+        setResultTone("error");
+        return;
+      }
+      if (data.reset === 0) {
+        setResult(t("ingest.reingestNone"));
+        setResultTone("info");
+        return;
+      }
+      setResult(t("ingest.reingestAllStarted", { reset: data.reset }));
+      setResultTone("info");
+      setActiveJobId(data.jobId);
+    });
+
   const handleAbortTranslation = () =>
     run(async () => {
       const res = await fetch(`/api/novels/${novelId}/translate-session/abort`, { method: "POST" });
@@ -227,6 +248,13 @@ export function IngestButton({ novelId }: Props) {
               className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-muted transition-colors hover:text-foreground hover:bg-surface-strong"
             >
               {t("ingest.ingestAll")}
+            </button>
+            <button
+              type="button"
+              onClick={handleReingestAll}
+              className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-muted transition-colors hover:text-foreground hover:bg-surface-strong"
+            >
+              {t("ingest.reingestAll")}
             </button>
 
             <div className="my-1 border-t border-border" />

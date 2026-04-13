@@ -102,6 +102,10 @@ export const dictionaries = {
     "ingest.abortSuccess": "Translation session aborted",
     "ingest.abortFailed": "Failed to abort",
     "ingest.noActiveSession": "No active translation session",
+    "ingest.reingestAll": "Re-ingest all episodes",
+    "ingest.reingestAllStarted": "Re-fetching {reset} episodes in background",
+    "ingest.reingestNone": "No episodes to re-ingest",
+    "ingest.reingestConfirm": "This will re-fetch all episodes from the source. Continue?",
 
     // Reader
     "reader.episodeList": "Episode list",
@@ -392,6 +396,10 @@ export const dictionaries = {
     "ingest.abortSuccess": "번역 세션이 중단되었습니다",
     "ingest.abortFailed": "중단 실패",
     "ingest.noActiveSession": "진행 중인 번역 세션이 없습니다",
+    "ingest.reingestAll": "전체 에피소드 재수집",
+    "ingest.reingestAllStarted": "{reset}화 백그라운드에서 재수집 시작",
+    "ingest.reingestNone": "재수집할 에피소드가 없습니다",
+    "ingest.reingestConfirm": "모든 에피소드를 원본에서 다시 가져옵니다. 계속하시겠습니까?",
 
     // Reader
     "reader.episodeList": "에피소드 목록",

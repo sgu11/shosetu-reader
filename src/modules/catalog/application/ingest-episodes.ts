@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { novels, episodes } from "@/lib/db/schema";
 import {
@@ -53,6 +53,28 @@ export async function discoverEpisodes(novelId: string): Promise<number> {
   }
 
   return newCount;
+}
+
+/**
+ * Reset all fetched (or failed) episodes of a novel back to "pending"
+ * so they will be re-fetched on the next ingest run.
+ * Returns the number of episodes reset.
+ */
+export async function resetFetchedEpisodes(novelId: string): Promise<number> {
+  const db = getDb();
+
+  const result = await db
+    .update(episodes)
+    .set({ fetchStatus: "pending", updatedAt: new Date() })
+    .where(
+      and(
+        eq(episodes.novelId, novelId),
+        sql`${episodes.fetchStatus} IN ('fetched', 'failed')`,
+      ),
+    )
+    .returning({ id: episodes.id });
+
+  return result.length;
 }
 
 /**
