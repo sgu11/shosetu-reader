@@ -1,13 +1,12 @@
 import { notFound } from "next/navigation";
 import { getNovelById, getEpisodesByNovelId } from "@/modules/catalog/application/get-novel";
-import { isSubscribed } from "@/modules/library/application/subscribe";
+import { isSubscribed, markEpisodesChecked } from "@/modules/library/application/subscribe";
 import Link from "next/link";
 import { IngestButton } from "@/components/ingest-button";
+import { NovelLiveSection } from "@/components/novel-live-section";
 import { SubscribeButton } from "@/components/subscribe-button";
 import { NovelGlossaryEditor } from "@/components/novel-glossary-editor";
 import { NovelTranslationInventory } from "@/components/novel-translation-inventory";
-import { NovelJobRefresh } from "@/components/novel-job-refresh";
-import { EpisodeList } from "@/components/episode-list";
 import { getLocale, t } from "@/lib/i18n";
 
 function shortModelName(modelName: string): string {
@@ -43,6 +42,10 @@ export default async function NovelDetailPage({ params }: Props) {
   let subscribed = false;
   try {
     subscribed = await isSubscribed(novelId);
+    // Clear "new episodes" badge when user visits novel detail
+    if (subscribed) {
+      markEpisodesChecked(novelId, novel.totalEpisodes).catch(() => {});
+    }
   } catch {
     // DB not ready — default to unsubscribed
   }
@@ -149,8 +152,6 @@ export default async function NovelDetailPage({ params }: Props) {
           <SubscribeButton novelId={novelId} initialSubscribed={subscribed} />
           <IngestButton novelId={novelId} />
         </div>
-
-        <NovelJobRefresh novelId={novelId} />
       </section>
 
       {/* Per-novel glossary & translation guidelines */}
@@ -163,13 +164,11 @@ export default async function NovelDetailPage({ params }: Props) {
       />
 
       {/* Episode list */}
-      <section className="space-y-4">
-        <EpisodeList
-          novelId={novelId}
-          initialEpisodes={episodes}
-          totalCount={totalCount}
-        />
-      </section>
+      <NovelLiveSection
+        novelId={novelId}
+        initialEpisodes={episodes}
+        totalCount={totalCount}
+      />
     </main>
   );
 }

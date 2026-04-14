@@ -6,7 +6,7 @@ const RATE_LIMIT_CONFIG = { limit: 10, windowSeconds: 60 };
 const MAX_TITLES = 50;
 
 export async function POST(req: NextRequest) {
-  const limited = rateLimit(req, RATE_LIMIT_CONFIG, "ranking-translate");
+  const limited = await rateLimit(req, RATE_LIMIT_CONFIG, "ranking-translate");
   if (limited) return limited;
 
   try {

@@ -21,7 +21,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ novelId: string }> },
 ) {
-  const limited = rateLimit(request, RATE_LIMIT, "ingest");
+  const limited = await rateLimit(request, RATE_LIMIT, "ingest");
   if (limited) return limited;
 
   const { novelId } = await params;

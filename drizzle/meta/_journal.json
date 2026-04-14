@@ -127,6 +127,20 @@
       "when": 1776400000000,
       "tag": "0017_episode_preface_afterword",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1776135600000,
+      "tag": "0018_v4_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1776500000000,
+      "tag": "0019_v4_new_episodes_and_budget",
+      "breakpoints": true
     }
   ]
 }

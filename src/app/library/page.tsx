@@ -75,6 +75,11 @@ export default async function LibraryPage() {
                       {item.isCompleted ? t(locale, "library.completed") : t(locale, "library.ongoing")}
                     </span>
                   )}
+                  {item.hasNewEpisodes && (
+                    <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-white">
+                      {t(locale, "library.newEpisodes")}
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-muted">
                   <span className="rounded-full bg-surface-strong px-2.5 py-1">

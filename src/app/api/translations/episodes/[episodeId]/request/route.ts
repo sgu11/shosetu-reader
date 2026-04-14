@@ -11,7 +11,7 @@ interface Ctx {
 const RATE_LIMIT = { limit: 10, windowSeconds: 60 };
 
 export async function POST(req: NextRequest, ctx: Ctx) {
-  const limited = rateLimit(req, RATE_LIMIT, "translate");
+  const limited = await rateLimit(req, RATE_LIMIT, "translate");
   if (limited) return limited;
 
   try {

@@ -155,6 +155,49 @@ export async function getLatestNovelJobForUser(input: {
   return rows.find((row) => getOwnerUserId(row.payloadJson) === input.userId) ?? null;
 }
 
+export async function getLatestNovelJob(novelId: string) {
+  const db = getDb();
+
+  const [row] = await db
+    .select()
+    .from(jobRuns)
+    .where(
+      and(
+        eq(jobRuns.entityType, "novel"),
+        eq(jobRuns.entityId, novelId),
+        inArray(jobRuns.status, ["queued", "running"]),
+      ),
+    )
+    .orderBy(desc(jobRuns.createdAt))
+    .limit(1);
+
+  return row ?? null;
+}
+
+export async function getActiveJobByKindAndEntity(input: {
+  jobType: JobKind;
+  entityType: string;
+  entityId: string;
+}) {
+  const db = getDb();
+
+  const [row] = await db
+    .select()
+    .from(jobRuns)
+    .where(
+      and(
+        eq(jobRuns.jobType, input.jobType),
+        eq(jobRuns.entityType, input.entityType),
+        eq(jobRuns.entityId, input.entityId),
+        inArray(jobRuns.status, ["queued", "running"]),
+      ),
+    )
+    .orderBy(desc(jobRuns.createdAt))
+    .limit(1);
+
+  return row ?? null;
+}
+
 export async function listQueuedJobs(limit: number = 100) {
   const db = getDb();
 

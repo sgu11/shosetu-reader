@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { episodes, translations, novelGlossaryEntries } from "@/lib/db/schema";
-import { env } from "@/lib/env";
+import { env, resolveModel } from "@/lib/env";
 import { logger } from "@/lib/logger";
+import { recordOpenRouterError, recordOpenRouterUsage } from "@/lib/ops-metrics";
 import { estimateCost } from "./cost-estimation";
 import { importGlossaryEntries, type GlossaryEntryInput } from "./glossary-entries";
 
@@ -105,7 +106,7 @@ export async function extractGlossaryTerms(
       "X-Title": "Shosetu Reader",
     },
     body: JSON.stringify({
-      model: env.OPENROUTER_DEFAULT_MODEL,
+      model: resolveModel("extraction"),
       messages: [
         { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
         {
@@ -121,6 +122,7 @@ export async function extractGlossaryTerms(
 
   if (!res.ok) {
     const errorBody = await res.text();
+    await recordOpenRouterError("glossary.extract", res.status);
     throw new Error(`Extraction API error ${res.status}: ${errorBody.slice(0, 200)}`);
   }
 
@@ -132,8 +134,15 @@ export async function extractGlossaryTerms(
   const extractInputTokens = data.usage?.prompt_tokens;
   const extractOutputTokens = data.usage?.completion_tokens;
   if (extractInputTokens != null && extractOutputTokens != null) {
-    const cost = await estimateCost(env.OPENROUTER_DEFAULT_MODEL, extractInputTokens, extractOutputTokens);
+    const cost = await estimateCost(resolveModel("extraction"), extractInputTokens, extractOutputTokens);
     if (cost != null) {
+      await recordOpenRouterUsage({
+        operation: "glossary.extract",
+        modelName: resolveModel("extraction"),
+        inputTokens: extractInputTokens,
+        outputTokens: extractOutputTokens,
+        costUsd: cost,
+      });
       logger.info("Glossary extraction cost", {
         novelId: payload.novelId,
         episodeNumber: payload.episodeNumber,

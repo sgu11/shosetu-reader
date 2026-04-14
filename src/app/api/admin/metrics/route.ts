@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
+import { logger } from "@/lib/logger";
 import { getDb } from "@/lib/db/client";
 import { requireAdmin } from "@/lib/auth/admin-guard";
+import { getMetricCounters } from "@/lib/ops-metrics";
 
 /**
  * GET /api/admin/metrics
@@ -16,7 +18,15 @@ export async function GET(req: NextRequest) {
   try {
     const db = getDb();
 
-    const [queueHealth, translationThroughput, recentActivity, systemOverview] =
+    const [
+      queueHealth,
+      translationThroughput,
+      recentActivity,
+      systemOverview,
+      queueLag,
+      retrySummary,
+      metricsCounters,
+    ] =
       await Promise.all([
         // Queue health: counts by status
         db.execute<{
@@ -118,16 +128,59 @@ export async function GET(req: NextRequest) {
             (SELECT count(*)::int FROM translations WHERE status = 'available') AS total_translations,
             (SELECT count(*)::int FROM subscriptions WHERE is_active = true) AS total_subscriptions
         `),
+        db.execute<{
+          oldest_queued_at: string | null;
+          queued_count: number;
+        }>(sql`
+          SELECT
+            min(created_at)::text AS oldest_queued_at,
+            count(*)::int AS queued_count
+          FROM job_runs
+          WHERE status = 'queued'
+        `),
+        db.execute<{
+          retried_jobs: number;
+          max_attempt_count: number | null;
+        }>(sql`
+          SELECT
+            count(*) FILTER (WHERE attempt_count > 1)::int AS retried_jobs,
+            max(attempt_count)::int AS max_attempt_count
+          FROM job_runs
+        `),
+        getMetricCounters([
+          "rate_limit.hit",
+          "request_dedupe.hit",
+          "openrouter.error",
+          "openrouter.usage",
+          "jobs.retry",
+          "jobs.recovered_stale",
+        ]),
       ]);
+
+    const queueLagRow = queueLag[0] ?? null;
+    const oldestQueuedAt = queueLagRow?.oldest_queued_at
+      ? new Date(queueLagRow.oldest_queued_at)
+      : null;
 
     return NextResponse.json({
       queueHealth: [...queueHealth],
+      queueLag: {
+        queuedCount: queueLagRow?.queued_count ?? 0,
+        oldestQueuedAt: oldestQueuedAt?.toISOString() ?? null,
+        oldestQueuedAgeMs: oldestQueuedAt
+          ? Math.max(0, Date.now() - oldestQueuedAt.getTime())
+          : 0,
+      },
       translationThroughput: [...translationThroughput],
       recentJobs: [...recentActivity],
+      retries: retrySummary[0] ?? { retried_jobs: 0, max_attempt_count: 0 },
+      counters: metricsCounters,
       system: systemOverview[0] ?? null,
     });
   } catch (err) {
-    console.error("Failed to fetch metrics:", err);
+    logger.error("Failed to fetch admin metrics", {
+      error: err instanceof Error ? err.message : "Unknown error",
+    });
     return NextResponse.json({ error: "Failed to fetch metrics" }, { status: 500 });
   }
 }

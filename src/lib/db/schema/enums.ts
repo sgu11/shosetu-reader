@@ -45,6 +45,7 @@ export const sessionStatusEnum = pgEnum("session_status", [
   "active",
   "completed",
   "cancelled",
+  "paused_budget",
 ]);
 
 // --- Glossary ---

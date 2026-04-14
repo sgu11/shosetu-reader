@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { novels, episodes, translations } from "@/lib/db/schema";
 import { translateTexts } from "@/lib/translate-cache";
@@ -30,6 +30,15 @@ export async function getNovelById(
     const cache = await translateTexts(textsToTranslate);
     if (!titleKo) titleKo = cache.get(row.titleJa) ?? null;
     if (!summaryKo && row.summaryJa) summaryKo = cache.get(row.summaryJa) ?? null;
+
+    // Persist back to novels table so future loads skip the translation lookup
+    const updates: Record<string, unknown> = {};
+    if (titleKo && !row.titleKo) updates.titleKo = titleKo;
+    if (summaryKo && !row.summaryKo) updates.summaryKo = summaryKo;
+    if (Object.keys(updates).length > 0) {
+      updates.updatedAt = new Date();
+      db.update(novels).set(updates).where(eq(novels.id, row.id)).then(() => {}, () => {});
+    }
   }
 
   const statusMap = await getNovelStatusOverviews([row.id]);
@@ -57,24 +66,15 @@ export async function getEpisodesByNovelId(
 ): Promise<{ episodes: EpisodeListItem[]; totalCount: number }> {
   const db = getDb();
 
-  // Subquery: latest translation per episode (most recent by created_at)
   const latestTranslation = db
-    .select({
+    .selectDistinctOn([translations.episodeId], {
       episodeId: translations.episodeId,
       status: translations.status,
       modelName: translations.modelName,
     })
     .from(translations)
-    .where(
-      and(
-        eq(translations.targetLanguage, "ko"),
-        sql`${translations.createdAt} = (
-          SELECT MAX(t2.created_at) FROM translations t2
-          WHERE t2.episode_id = ${translations.episodeId}
-            AND t2.target_language = 'ko'
-        )`,
-      ),
-    )
+    .where(eq(translations.targetLanguage, "ko"))
+    .orderBy(translations.episodeId, desc(translations.createdAt))
     .as("latest_tr");
 
   const rows = await db

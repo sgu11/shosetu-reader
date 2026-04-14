@@ -143,6 +143,7 @@ export function NovelGlossaryEditor({ novelId }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [generatingJobId, setGeneratingJobId] = useState<string | null>(null);
 
   /* ---------- Model selector state ---------- */
   const [selectedModel, setSelectedModel] = useState("");
@@ -195,6 +196,7 @@ export function NovelGlossaryEditor({ novelId }: Props) {
           episodeCount: data.episodeCount ?? null,
           generatedAt: data.generatedAt ?? null,
         });
+        setGeneratingJobId(typeof data.activeJob?.id === "string" ? data.activeJob.id : null);
       })
       .catch(() => {});
   }, [novelId]);
@@ -244,6 +246,85 @@ export function NovelGlossaryEditor({ novelId }: Props) {
     if (modelPickerOpen) document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [modelPickerOpen]);
+
+  useEffect(() => {
+    if (!generatingJobId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function pollJob() {
+      try {
+        const res = await fetch(`/api/jobs/${generatingJobId}`);
+        if (!res.ok || cancelled) {
+          return;
+        }
+
+        const data = await res.json();
+        if (cancelled) {
+          return;
+        }
+
+        if (data.status === "completed") {
+          setGenerating(false);
+          setGeneratingJobId(null);
+
+          const [glossaryRes, entriesRes] = await Promise.all([
+            fetch(`/api/novels/${novelId}/glossary`),
+            fetch(`/api/novels/${novelId}/glossary/entries`),
+          ]);
+
+          if (glossaryRes.ok) {
+            const glossaryData = await glossaryRes.json();
+            setGlossary(glossaryData.glossary ?? "");
+            setMeta({
+              modelName: glossaryData.modelName ?? data.result?.modelName ?? null,
+              episodeCount: glossaryData.episodeCount ?? data.result?.episodeCount ?? null,
+              generatedAt: glossaryData.generatedAt ?? new Date().toISOString(),
+            });
+          }
+
+          if (entriesRes.ok) {
+            const entriesData = await entriesRes.json();
+            setEntries(entriesData.entries ?? []);
+          }
+
+          const imported = data.result?.entriesImported ?? 0;
+          showToast(
+            imported > 0
+              ? t("glossary.generatedWithEntries", { count: imported })
+              : t("glossary.generated"),
+            "success",
+          );
+          return;
+        }
+
+        if (data.status === "failed") {
+          setGenerating(false);
+          setGeneratingJobId(null);
+          showToast(data.result?.errorMessage ?? t("glossary.generateFailed"), "error");
+        }
+      } catch {
+        // ignore transient polling errors
+      }
+    }
+
+    setGenerating(true);
+    void pollJob();
+
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== "visible" || cancelled) {
+        return;
+      }
+      void pollJob();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [generatingJobId, novelId, showToast, t]);
 
   /* ---------------------------------------------------------------- */
   /*  Derived                                                          */
@@ -417,29 +498,19 @@ export function NovelGlossaryEditor({ novelId }: Props) {
       const data = await res.json();
       if (!res.ok) {
         showToast(data.error ?? t("glossary.generateFailed"), "error");
+        setGenerating(false);
         return;
       }
-      setGlossary(data.glossary ?? "");
-      setMeta({
-        modelName: data.modelName ?? null,
-        episodeCount: data.episodeCount ?? null,
-        generatedAt: new Date().toISOString(),
-      });
-      // Refresh entries table with newly imported entries
-      loadEntries();
-      const imported = data.entriesImported ?? 0;
-      showToast(
-        imported > 0
-          ? t("glossary.generatedWithEntries", { count: imported })
-          : t("glossary.generated"),
-        "success",
-      );
+      if (typeof data.jobId === "string") {
+        setGeneratingJobId(data.jobId);
+      } else {
+        setGenerating(false);
+      }
     } catch {
       showToast(t("glossary.networkError"), "error");
-    } finally {
       setGenerating(false);
     }
-  }, [novelId, selectedModel, showToast, loadEntries, t]);
+  }, [novelId, selectedModel, showToast, t]);
 
   /* ---------------------------------------------------------------- */
   /*  Render                                                           */

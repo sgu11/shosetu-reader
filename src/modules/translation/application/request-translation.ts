@@ -2,6 +2,8 @@ import { eq, and, asc } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { episodes, translations, translationSettings, novelGlossaries, novelGlossaryEntries } from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import { logger } from "@/lib/logger";
+import { recordOpenRouterUsage } from "@/lib/ops-metrics";
 import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
 import { getJobQueue } from "@/modules/jobs/application/job-queue";
 import { OpenRouterProvider } from "../infra/openrouter-provider";
@@ -388,6 +390,16 @@ export async function processQueuedTranslation(
       ? await estimateCost(provider.modelName, totalInputTokens, totalOutputTokens)
       : null;
 
+    if (hasTokenInfo) {
+      await recordOpenRouterUsage({
+        operation: "translation.episode",
+        modelName: provider.modelName,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+        costUsd,
+      });
+    }
+
     // Load confirmed glossary entries for quality validation
     const confirmedEntries = await db
       .select({
@@ -461,7 +473,10 @@ export async function processQueuedTranslation(
       }
     } catch (extractErr) {
       // Non-fatal: don't fail the translation if extraction enqueue fails
-      console.error("Failed to enqueue glossary extraction:", extractErr);
+      logger.warn("Failed to enqueue glossary extraction", {
+        episodeId: payload.episodeId,
+        error: extractErr instanceof Error ? extractErr.message : "Unknown error",
+      });
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

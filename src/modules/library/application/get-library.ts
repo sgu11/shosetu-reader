@@ -25,6 +25,7 @@ export async function getLibrary(): Promise<{
       isCompleted: novels.isCompleted,
       totalEpisodes: novels.totalEpisodes,
       subscribedAt: subscriptions.subscribedAt,
+      lastCheckedEpisodeCount: subscriptions.lastCheckedEpisodeCount,
       lastReadAt: readingProgress.lastReadAt,
       currentEpisodeId: readingProgress.currentEpisodeId,
       currentLanguage: readingProgress.currentLanguage,
@@ -83,7 +84,10 @@ export async function getLibrary(): Promise<{
         ? (currentEpisodeNumberMap.get(row.currentEpisodeId) ?? null)
         : null,
       currentLanguage: row.currentLanguage ?? null,
-      hasNewEpisodes: false, // TODO: compare totalEpisodes with last checked count
+      hasNewEpisodes:
+        row.totalEpisodes != null &&
+        (row.lastCheckedEpisodeCount == null ||
+         row.totalEpisodes > row.lastCheckedEpisodeCount),
       statusOverview: statusMap[row.novelId] ?? createEmptyNovelStatusOverview(),
     });
   }
@@ -111,10 +115,13 @@ export async function getContinueReading(): Promise<
       novelId: novels.id,
       titleJa: novels.titleJa,
       episodeId: readingProgress.currentEpisodeId,
+      episodeNumber: episodes.episodeNumber,
+      episodeTitle: episodes.titleJa,
       lastReadAt: readingProgress.lastReadAt,
     })
     .from(readingProgress)
     .innerJoin(novels, eq(readingProgress.novelId, novels.id))
+    .innerJoin(episodes, eq(readingProgress.currentEpisodeId, episodes.id))
     .innerJoin(
       subscriptions,
       and(
@@ -126,29 +133,14 @@ export async function getContinueReading(): Promise<
     .orderBy(desc(readingProgress.lastReadAt))
     .limit(5);
 
-  const result = [];
-
-  for (const row of rows) {
-    const [ep] = await db
-      .select({
-        episodeNumber: episodes.episodeNumber,
-        titleJa: episodes.titleJa,
-      })
-      .from(episodes)
-      .where(eq(episodes.id, row.episodeId))
-      .limit(1);
-
-    if (ep) {
-      result.push({
-        novelId: row.novelId,
-        titleJa: row.titleJa,
-        episodeId: row.episodeId,
-        episodeNumber: ep.episodeNumber,
-        episodeTitle: ep.titleJa,
-        lastReadAt: row.lastReadAt.toISOString(),
-      });
-    }
-  }
+  const result = rows.map((row) => ({
+    novelId: row.novelId,
+    titleJa: row.titleJa,
+    episodeId: row.episodeId,
+    episodeNumber: row.episodeNumber,
+    episodeTitle: row.episodeTitle,
+    lastReadAt: row.lastReadAt.toISOString(),
+  }));
 
   // Batch-translate novel titles and episode titles
   const textsToTranslate = [

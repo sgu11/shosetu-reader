@@ -3,6 +3,8 @@ import type {
   TranslationRequest,
   TranslationResult,
 } from "../domain/provider";
+import { logger } from "@/lib/logger";
+import { recordOpenRouterError } from "@/lib/ops-metrics";
 
 const BASE_SYSTEM_PROMPT = `You are a professional Japanese-to-Korean translator specializing in web novel (ウェブ小説) translation.
 
@@ -52,9 +54,17 @@ export class OpenRouterProvider implements TranslationProvider {
     const RETRYABLE = new Set([429, 502, 503, 504]);
 
     // Build messages: system (stable/cacheable) → context (per-session) → source (per-episode)
-    const messages: Array<{ role: string; content: string }> = [
-      { role: "system", content: this.buildSystemPrompt() },
-    ];
+    // The system message is identical across requests for the same novel/session,
+    // enabling automatic prefix caching on Gemini and explicit cache_control on Anthropic.
+    const systemMessage: Record<string, unknown> = {
+      role: "system",
+      content: this.buildSystemPrompt(),
+    };
+    // Anthropic models on OpenRouter support cache_control breakpoints
+    if (this.modelName.startsWith("anthropic/")) {
+      systemMessage.cache_control = { type: "ephemeral" };
+    }
+    const messages: Array<Record<string, unknown>> = [systemMessage];
 
     if (contextSummary?.trim()) {
       messages.push({
@@ -119,6 +129,7 @@ export class OpenRouterProvider implements TranslationProvider {
 
       if (!res.ok) {
         const errorBody = await res.text();
+        await recordOpenRouterError("translation.episode", res.status);
         if (RETRYABLE.has(res.status) && attempt < MAX_RETRIES) {
           const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
           await new Promise((r) => setTimeout(r, delay));
@@ -142,6 +153,18 @@ export class OpenRouterProvider implements TranslationProvider {
         truncationRetried = true;
         currentMaxTokens = Math.min(currentMaxTokens * 2, 65536);
         continue;
+      }
+
+      // Log prompt cache metrics when available (Gemini: cached_tokens, Anthropic: cache_read_input_tokens)
+      const cachedTokens = data.usage?.cached_tokens
+        ?? data.usage?.cache_read_input_tokens
+        ?? data.usage?.prompt_tokens_details?.cached_tokens;
+      if (cachedTokens != null && cachedTokens > 0) {
+        logger.info("Prompt cache hit", {
+          model: this.modelName,
+          cachedTokens,
+          totalInputTokens: data.usage?.prompt_tokens,
+        });
       }
 
       return {

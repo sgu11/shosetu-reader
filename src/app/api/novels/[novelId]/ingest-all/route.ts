@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { acquireRequestDeduplicationLock } from "@/lib/request-dedupe";
 import { getNovelById } from "@/modules/catalog/application/get-novel";
 import { discoverEpisodes } from "@/modules/catalog/application/ingest-episodes";
 import { getJobQueue } from "@/modules/jobs/application/job-queue";
 import type { IngestAllJobPayload } from "@/modules/jobs/application/job-handlers";
-import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
+import { getActiveJobByKindAndEntity } from "@/modules/jobs/application/job-runs";
 import { rateLimit } from "@/lib/rate-limit";
 import { isValidUuid } from "@/lib/validation";
 
@@ -20,7 +21,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ novelId: string }> },
 ) {
-  const limited = rateLimit(request, RATE_LIMIT, "ingest-all");
+  const limited = await rateLimit(request, RATE_LIMIT, "ingest-all");
   if (limited) return limited;
 
   const { novelId } = await params;
@@ -33,15 +34,40 @@ export async function POST(
     return NextResponse.json({ error: "Novel not found" }, { status: 404 });
   }
 
+  const existingJob = await getActiveJobByKindAndEntity({
+    jobType: "catalog.ingest-all",
+    entityType: "novel",
+    entityId: novelId,
+  });
+  if (existingJob) {
+    return NextResponse.json(
+      {
+        novelId,
+        discovered: 0,
+        jobId: existingJob.id,
+        runner: "redis",
+        message: "Ingest job already in progress",
+      },
+      { status: 202 },
+    );
+  }
+
+  const dedupe = await acquireRequestDeduplicationLock({
+    scope: `ingest-all:${novelId}`,
+    ttlMs: 10_000,
+  });
+  if (!dedupe.acquired) {
+    return NextResponse.json({ error: "Ingest was requested recently" }, { status: 409 });
+  }
+
   // Discover first (synchronous — fast, just TOC scrape)
   const discovered = await discoverEpisodes(novelId);
   const jobQueue = getJobQueue();
-  const ownerUserId = await resolveUserId();
   const payload: IngestAllJobPayload = {
     novelId,
     limit: 9999,
     discovered,
-    ownerUserId,
+    ownerUserId: "site",
   };
 
   const job = await jobQueue.enqueue(

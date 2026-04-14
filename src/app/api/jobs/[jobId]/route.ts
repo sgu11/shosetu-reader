@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import { isValidUuid } from "@/lib/validation";
-import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
 import { getJobRun } from "@/modules/jobs/application/job-runs";
 
 interface Ctx {
@@ -19,13 +19,6 @@ export async function GET(_req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
-    const currentUserId = await resolveUserId();
-    const ownerUserId = getOwnerUserId(job.payloadJson);
-
-    if (!ownerUserId || ownerUserId !== currentUserId) {
-      return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    }
-
     return NextResponse.json({
       id: job.id,
       jobType: job.jobType,
@@ -39,18 +32,11 @@ export async function GET(_req: Request, ctx: Ctx) {
       createdAt: job.createdAt.toISOString(),
     });
   } catch (err) {
-    console.error("Failed to fetch job:", err);
+    logger.error("Failed to fetch job", {
+      error: err instanceof Error ? err.message : "Unknown error",
+    });
     return NextResponse.json({ error: "Failed to fetch job" }, { status: 500 });
   }
-}
-
-function getOwnerUserId(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-
-  const ownerUserId = (payload as Record<string, unknown>).ownerUserId;
-  return typeof ownerUserId === "string" ? ownerUserId : null;
 }
 
 function sanitizeJobResult(result: unknown) {
@@ -68,6 +54,11 @@ function sanitizeJobResult(result: unknown) {
     fetched: toNumberOrNull(source.fetched),
     failed: toNumberOrNull(source.failed),
     queued: toNumberOrNull(source.queued),
+    entriesImported: toNumberOrNull(source.entriesImported),
+    entriesSkipped: toNumberOrNull(source.entriesSkipped),
+    episodeCount: toNumberOrNull(source.episodeCount),
+    glossary: typeof source.glossary === "string" ? source.glossary : null,
+    modelName: typeof source.modelName === "string" ? source.modelName : null,
     errorMessage: typeof source.errorMessage === "string" ? source.errorMessage : null,
   };
 }

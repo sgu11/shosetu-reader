@@ -9,7 +9,7 @@ const VALID_PERIODS = new Set(["daily", "weekly", "monthly", "quarterly"]);
 const RATE_LIMIT_CONFIG = { limit: 20, windowSeconds: 60 };
 
 export async function GET(req: NextRequest) {
-  const limited = rateLimit(req, RATE_LIMIT_CONFIG, "ranking");
+  const limited = await rateLimit(req, RATE_LIMIT_CONFIG, "ranking");
   if (limited) return limited;
   try {
     const { searchParams } = req.nextUrl;

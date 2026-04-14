@@ -8,7 +8,7 @@ import { rateLimit } from "@/lib/rate-limit";
 const RATE_LIMIT = { limit: 5, windowSeconds: 60 };
 
 export async function POST(request: NextRequest) {
-  const limited = rateLimit(request, RATE_LIMIT, "register");
+  const limited = await rateLimit(request, RATE_LIMIT, "register");
   if (limited) return limited;
   let body: unknown;
   try {

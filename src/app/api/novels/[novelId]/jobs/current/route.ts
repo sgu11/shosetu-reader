@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import { isValidUuid } from "@/lib/validation";
-import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
-import { getLatestNovelJobForUser } from "@/modules/jobs/application/job-runs";
+import { getLatestNovelJob } from "@/modules/jobs/application/job-runs";
 
 interface Ctx {
   params: Promise<{ novelId: string }>;
@@ -14,8 +14,7 @@ export async function GET(_req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "Invalid novel ID" }, { status: 400 });
     }
 
-    const userId = await resolveUserId();
-    const job = await getLatestNovelJobForUser({ novelId, userId });
+    const job = await getLatestNovelJob(novelId);
 
     if (!job) {
       return NextResponse.json({ job: null });
@@ -29,7 +28,9 @@ export async function GET(_req: Request, ctx: Ctx) {
       },
     });
   } catch (err) {
-    console.error("Failed to fetch current novel job:", err);
+    logger.error("Failed to fetch current novel job", {
+      error: err instanceof Error ? err.message : "Unknown error",
+    });
     return NextResponse.json({ error: "Failed to fetch current novel job" }, { status: 500 });
   }
 }

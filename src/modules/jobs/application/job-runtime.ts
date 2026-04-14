@@ -1,4 +1,5 @@
 import { logger } from "@/lib/logger";
+import { recordJobRetry, recordRecoveredStaleJob } from "@/lib/ops-metrics";
 import { createRedisConnection, getRedisClient } from "@/lib/redis/client";
 import { getJobHandler } from "./job-handlers";
 import {
@@ -156,6 +157,7 @@ async function processJob(jobId: string) {
     if (attemptCount < runtimeConfig.maxAttempts) {
       await requeueJob(jobId, errorResult);
       await publishJobWithDelay(jobId, getRetryDelayMs(attemptCount));
+      await recordJobRetry(claimed.jobType);
 
       logger.warn("Job scheduled for retry", {
         jobId,
@@ -213,6 +215,7 @@ async function recoverStaleRunningJobs() {
       errorMessage: "Recovered stale running job",
     });
     await publishJobToQueue(job.id);
+    await recordRecoveredStaleJob();
   }
 }
 

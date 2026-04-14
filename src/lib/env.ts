@@ -9,7 +9,11 @@ const serverEnvSchema = z.object({
   REDIS_URL: z.string().optional().default(""),
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_DEFAULT_MODEL: z.string().optional().default("google/gemini-2.5-flash-lite"),
+  OPENROUTER_SUMMARY_MODEL: z.string().optional(),
+  OPENROUTER_EXTRACTION_MODEL: z.string().optional(),
+  OPENROUTER_TITLE_MODEL: z.string().optional(),
   ADMIN_API_KEY: z.string().optional(),
+  TRANSLATION_COST_BUDGET_USD: z.coerce.number().positive().optional(),
 });
 
 export type Env = z.infer<typeof serverEnvSchema>;
@@ -21,7 +25,11 @@ const parsedEnv = serverEnvSchema.safeParse({
   REDIS_URL: process.env.REDIS_URL,
   OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
   OPENROUTER_DEFAULT_MODEL: process.env.OPENROUTER_DEFAULT_MODEL,
+  OPENROUTER_SUMMARY_MODEL: process.env.OPENROUTER_SUMMARY_MODEL,
+  OPENROUTER_EXTRACTION_MODEL: process.env.OPENROUTER_EXTRACTION_MODEL,
+  OPENROUTER_TITLE_MODEL: process.env.OPENROUTER_TITLE_MODEL,
   ADMIN_API_KEY: process.env.ADMIN_API_KEY,
+  TRANSLATION_COST_BUDGET_USD: process.env.TRANSLATION_COST_BUDGET_USD,
 });
 
 if (!parsedEnv.success) {
@@ -33,6 +41,25 @@ if (!parsedEnv.success) {
 }
 
 export const env = parsedEnv.data;
+
+export type ModelWorkload = "summary" | "extraction" | "title" | "default";
+
+/**
+ * Resolve the OpenRouter model for a specific workload.
+ * Falls back to OPENROUTER_DEFAULT_MODEL if no workload-specific override is set.
+ */
+export function resolveModel(workload: ModelWorkload = "default"): string {
+  switch (workload) {
+    case "summary":
+      return env.OPENROUTER_SUMMARY_MODEL || env.OPENROUTER_DEFAULT_MODEL;
+    case "extraction":
+      return env.OPENROUTER_EXTRACTION_MODEL || env.OPENROUTER_DEFAULT_MODEL;
+    case "title":
+      return env.OPENROUTER_TITLE_MODEL || env.OPENROUTER_DEFAULT_MODEL;
+    default:
+      return env.OPENROUTER_DEFAULT_MODEL;
+  }
+}
 
 export function getPublicRuntimeConfig() {
   return {

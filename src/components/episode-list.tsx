@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useTranslation } from "@/lib/i18n/client";
 import { EpisodeTranslationBadge } from "./episode-translation-badge";
@@ -14,6 +13,7 @@ interface Episode {
   hasTranslation: boolean;
   translationStatus: "queued" | "processing" | "available" | "failed" | null;
   translationModel: string | null;
+  translationProgressPercent?: number | null;
   publishedAt: string | null;
 }
 
@@ -23,67 +23,11 @@ interface Props {
   totalCount: number;
 }
 
-function hasActiveState(ep: Episode): boolean {
-  return (
-    ep.translationStatus === "processing" ||
-    ep.translationStatus === "queued" ||
-    ep.fetchStatus === "pending" ||
-    ep.fetchStatus === "fetching"
-  );
-}
-
 export function EpisodeList({ novelId, initialEpisodes, totalCount }: Props) {
   const { t, locale } = useTranslation();
-
-  // polledData holds fresh data from polling; null means "use initialEpisodes"
-  const [polledData, setPolledData] = useState<Episode[] | null>(null);
-
-  // Track previous initialEpisodes to detect server re-renders.
-  // This is the "adjusting state during render" pattern from React docs
-  // (not an effect, not a ref) — React handles the extra render correctly.
-  const [prevInitial, setPrevInitial] = useState(initialEpisodes);
-  if (prevInitial !== initialEpisodes) {
-    setPrevInitial(initialEpisodes);
-    setPolledData(null);
-  }
-
-  const episodes = polledData ?? initialEpisodes;
-  const count = polledData ? polledData.length : totalCount;
-
-  const mergeEpisodes = useCallback((fresh: Episode[]) => {
-    setPolledData(fresh);
-  }, []);
-
-  // Poll when any episode is in an active state
-  useEffect(() => {
-    const shouldPoll = episodes.some(hasActiveState);
-    if (!shouldPoll) return;
-
-    let cancelled = false;
-
-    async function poll() {
-      try {
-        const res = await fetch(`/api/novels/${novelId}/episodes`);
-        if (!res.ok || cancelled) return;
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data.episodes)) {
-          mergeEpisodes(data.episodes);
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    const interval = window.setInterval(() => {
-      if (document.visibilityState !== "visible" || cancelled) return;
-      void poll();
-    }, 5000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [novelId, episodes, mergeEpisodes]);
+  void novelId;
+  const episodes = initialEpisodes;
+  const count = totalCount;
 
   if (episodes.length === 0) {
     return (
@@ -127,7 +71,11 @@ export function EpisodeList({ novelId, initialEpisodes, totalCount }: Props) {
                     KR
                   </span>
                 ) : isProcessing ? (
-                  <EpisodeTranslationBadge episodeId={ep.id} label={t("status.translationProcessing")} />
+                  <EpisodeTranslationBadge
+                    episodeId={ep.id}
+                    label={t("status.translationProcessing")}
+                    percent={ep.translationProgressPercent ?? null}
+                  />
                 ) : ep.translationStatus === "queued" ? (
                   <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs text-accent animate-pulse">
                     {t("status.translationQueued")}

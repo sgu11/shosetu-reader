@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { novels } from "@/lib/db/schema";
 import {
@@ -30,32 +30,30 @@ export async function getRanking(
 ): Promise<RankingItem[]> {
   const ranked = await fetchRanking(period, limit);
   const db = getDb();
+  const ncodes = [...new Set(ranked.map((item) => item.ncode))];
 
-  const items: RankingItem[] = [];
-
-  for (let i = 0; i < ranked.length; i++) {
-    const meta = ranked[i];
-
-    // Check if this novel is already registered
-    const [existing] = await db
-      .select({ id: novels.id })
+  const existingRows = ncodes.length === 0
+    ? []
+    : await db
+      .select({
+        id: novels.id,
+        sourceNcode: novels.sourceNcode,
+      })
       .from(novels)
-      .where(eq(novels.sourceNcode, meta.ncode))
-      .limit(1);
+      .where(inArray(novels.sourceNcode, ncodes));
 
-    items.push({
-      rank: i + 1,
-      ncode: meta.ncode,
-      title: meta.title,
-      authorName: meta.authorName,
-      totalEpisodes: meta.totalEpisodes,
-      isCompleted: meta.isCompleted,
-      sourceUrl: buildNovelUrl(meta.ncode),
-      novelId: existing?.id ?? null,
-    });
-  }
+  const existingByNcode = new Map(existingRows.map((row) => [row.sourceNcode, row.id]));
 
-  return items;
+  return ranked.map((meta, index) => ({
+    rank: index + 1,
+    ncode: meta.ncode,
+    title: meta.title,
+    authorName: meta.authorName,
+    totalEpisodes: meta.totalEpisodes,
+    isCompleted: meta.isCompleted,
+    sourceUrl: buildNovelUrl(meta.ncode),
+    novelId: existingByNcode.get(meta.ncode) ?? null,
+  }));
 }
 
 /**

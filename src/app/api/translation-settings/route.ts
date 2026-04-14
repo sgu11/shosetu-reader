@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { translationSettings } from "@/lib/db/schema";
 import { env } from "@/lib/env";
+import { logger } from "@/lib/logger";
+import { isKnownOpenRouterModel } from "@/lib/openrouter/models-cache";
 import { DEFAULT_GLOBAL_PROMPT } from "@/modules/translation/domain/default-prompt";
 import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
 
@@ -26,7 +28,9 @@ export async function GET() {
       defaultGlobalPrompt: DEFAULT_GLOBAL_PROMPT,
     });
   } catch (err) {
-    console.error("Failed to fetch translation settings:", err);
+    logger.error("Failed to fetch translation settings", {
+      error: err instanceof Error ? err.message : "Unknown error",
+    });
     return NextResponse.json({ error: "Failed to fetch translation settings" }, { status: 500 });
   }
 }
@@ -64,7 +68,15 @@ export async function PUT(req: NextRequest) {
 
     const update: Record<string, string> = {};
     if (typeof modelName === "string" && modelName.trim()) {
-      update.modelName = modelName.trim();
+      const normalizedModelName = modelName.trim();
+      const knownModel = await isKnownOpenRouterModel(normalizedModelName);
+      if (!knownModel) {
+        return NextResponse.json(
+          { error: "Unknown OpenRouter model" },
+          { status: 400 },
+        );
+      }
+      update.modelName = normalizedModelName;
     }
     if (typeof globalPrompt === "string") {
       update.globalPrompt = globalPrompt;
@@ -85,7 +97,9 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Failed to update translation settings:", err);
+    logger.error("Failed to update translation settings", {
+      error: err instanceof Error ? err.message : "Unknown error",
+    });
     return NextResponse.json({ error: "Failed to update translation settings" }, { status: 500 });
   }
 }

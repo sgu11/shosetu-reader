@@ -8,7 +8,9 @@ import {
   novelGlossaries,
   novelGlossaryEntries,
 } from "@/lib/db/schema";
-import { env } from "@/lib/env";
+import { env, resolveModel } from "@/lib/env";
+import { logger } from "@/lib/logger";
+import { recordOpenRouterError, recordOpenRouterUsage } from "@/lib/ops-metrics";
 import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
 import { getJobQueue } from "@/modules/jobs/application/job-queue";
 import { computePromptFingerprint } from "./prompt-fingerprint";
@@ -92,6 +94,7 @@ export async function createTranslationSession(
       creatorUserId: userId,
       expectedNextIndex: 0,
       globalPrompt,
+      costBudgetUsd: env.TRANSLATION_COST_BUDGET_USD ?? null,
     })
     .returning({ id: translationSessions.id });
 
@@ -142,11 +145,27 @@ export async function advanceSession(
 
   if (!session || session.status !== "active") return;
 
+  // Cost budget check — pause session if budget exceeded
+  if (session.costBudgetUsd != null && session.totalCostUsd >= session.costBudgetUsd) {
+    await db
+      .update(translationSessions)
+      .set({ status: "paused_budget", updatedAt: new Date() })
+      .where(eq(translationSessions.id, payload.sessionId));
+    logger.info("Session paused — cost budget exceeded", {
+      sessionId: payload.sessionId,
+      totalCostUsd: session.totalCostUsd,
+      costBudgetUsd: session.costBudgetUsd,
+    });
+    return;
+  }
+
   // Ordering guard — reject out-of-order advances
   if (payload.currentIndex !== session.expectedNextIndex) {
-    console.error(
-      `Session ${payload.sessionId}: out-of-order advance (expected ${session.expectedNextIndex}, got ${payload.currentIndex})`,
-    );
+    logger.error("Session advance rejected due to ordering mismatch", {
+      sessionId: payload.sessionId,
+      expectedNextIndex: session.expectedNextIndex,
+      actualIndex: payload.currentIndex,
+    });
     return;
   }
 
@@ -274,10 +293,11 @@ export async function advanceSession(
       contextSummary: session.contextSummary ?? undefined,
     });
   } catch (err) {
-    console.error(
-      `Session ${payload.sessionId}: translation failed for episode ${episodeId}`,
-      err,
-    );
+    logger.error("Session translation failed", {
+      sessionId: payload.sessionId,
+      episodeId,
+      error: err instanceof Error ? err.message : "Unknown error",
+    });
     // Mark translation as failed
     if (translationId) {
       await db
@@ -395,6 +415,8 @@ Given the previous rolling summary and the latest episode, produce a REPLACEMENT
 Keep the summary under 2000 characters. Write in English for cross-model compatibility.
 Output ONLY the summary text, no headers or labels.`;
 
+  const summaryModel = resolveModel("summary");
+
   try {
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -405,7 +427,7 @@ Output ONLY the summary text, no headers or labels.`;
         "X-Title": "Shosetu Reader",
       },
       body: JSON.stringify({
-        model: env.OPENROUTER_DEFAULT_MODEL,
+        model: summaryModel,
         messages: [
           { role: "system", content: summaryPrompt },
           {
@@ -419,7 +441,11 @@ Output ONLY the summary text, no headers or labels.`;
     });
 
     if (!res.ok) {
-      console.error("Summary generation failed:", res.status);
+      await recordOpenRouterError("translation.session-summary", res.status);
+      logger.warn("Summary generation failed", {
+        sessionId: payload.sessionId,
+        status: res.status,
+      });
     } else {
       const data = await res.json();
       const summary = data.choices?.[0]?.message?.content?.trim();
@@ -430,10 +456,17 @@ Output ONLY the summary text, no headers or labels.`;
       const summaryOutputTokens = data.usage?.completion_tokens;
       if (summaryInputTokens != null && summaryOutputTokens != null) {
         summaryCostUsd = await estimateCost(
-          env.OPENROUTER_DEFAULT_MODEL,
+          summaryModel,
           summaryInputTokens,
           summaryOutputTokens,
         ) ?? 0;
+        await recordOpenRouterUsage({
+          operation: "translation.session-summary",
+          modelName: summaryModel,
+          inputTokens: summaryInputTokens,
+          outputTokens: summaryOutputTokens,
+          costUsd: summaryCostUsd,
+        });
       }
 
       if (summary) {
@@ -452,7 +485,10 @@ Output ONLY the summary text, no headers or labels.`;
       }
     }
   } catch (err) {
-    console.error("Failed to generate session summary:", err);
+    logger.warn("Failed to generate session summary", {
+      sessionId: payload.sessionId,
+      error: err instanceof Error ? err.message : "Unknown error",
+    });
   }
 
   // Advance to next episode regardless of summary success

@@ -7,9 +7,9 @@ export async function subscribeToNovel(
 ): Promise<{ subscriptionId: string; isNew: boolean }> {
   const db = getDb();
 
-  // Verify novel exists
+  // Verify novel exists and get episode count
   const [novel] = await db
-    .select({ id: novels.id })
+    .select({ id: novels.id, totalEpisodes: novels.totalEpisodes })
     .from(novels)
     .where(eq(novels.id, novelId))
     .limit(1);
@@ -38,7 +38,7 @@ export async function subscribeToNovel(
 
   const [row] = await db
     .insert(subscriptions)
-    .values({ novelId })
+    .values({ novelId, lastCheckedEpisodeCount: novel.totalEpisodes })
     .returning({ id: subscriptions.id });
 
   return { subscriptionId: row.id, isNew: true };
@@ -59,6 +59,23 @@ export async function unsubscribeFromNovel(novelId: string): Promise<boolean> {
     .returning({ id: subscriptions.id });
 
   return result.length > 0;
+}
+
+/**
+ * Mark the subscription's episode count as current, clearing the "new episodes" badge.
+ */
+export async function markEpisodesChecked(novelId: string, totalEpisodes: number | null): Promise<void> {
+  if (totalEpisodes == null) return;
+  const db = getDb();
+  await db
+    .update(subscriptions)
+    .set({ lastCheckedEpisodeCount: totalEpisodes })
+    .where(
+      and(
+        eq(subscriptions.novelId, novelId),
+        eq(subscriptions.isActive, true),
+      ),
+    );
 }
 
 export async function isSubscribed(novelId: string): Promise<boolean> {

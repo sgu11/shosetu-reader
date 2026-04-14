@@ -1,4 +1,5 @@
 import {
+  index,
   boolean,
   integer,
   jsonb,
@@ -9,6 +10,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import {
   contentLanguageEnum,
   glossaryEntryCategoryEnum,
@@ -57,6 +59,18 @@ export const translations = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (table) => [
+    index("translations_episode_language_created_idx").on(
+      table.episodeId,
+      table.targetLanguage,
+      table.createdAt,
+    ),
+    index("translations_status_completed_idx").on(
+      table.status,
+      table.completedAt,
+    ),
+    index("translations_active_status_idx")
+      .on(table.episodeId, table.status)
+      .where(sql`${table.status} in ('queued', 'processing')`),
     uniqueIndex("translations_identity_idx").on(
       table.episodeId,
       table.targetLanguage,
@@ -93,12 +107,18 @@ export const translationSessions = pgTable("translation_sessions", {
   lastEpisodeNumber: integer("last_episode_number"),
   episodeCount: integer("episode_count").notNull().default(0),
   totalCostUsd: real("total_cost_usd").notNull().default(0),
+  costBudgetUsd: real("cost_budget_usd"),
   creatorUserId: uuid("creator_user_id"),
   expectedNextIndex: integer("expected_next_index").notNull().default(0),
   globalPrompt: text("global_prompt").notNull().default(""),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("translation_sessions_novel_status_idx").on(
+    table.novelId,
+    table.status,
+  ),
+]);
 
 export const novelGlossaries = pgTable("novel_glossaries", {
   id: uuid().primaryKey().defaultRandom(),
@@ -137,6 +157,11 @@ export const novelGlossaryEntries = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    index("novel_glossary_entries_status_importance_idx").on(
+      table.novelId,
+      table.status,
+      table.importance,
+    ),
     uniqueIndex("novel_glossary_entries_unique_idx").on(
       table.novelId,
       table.termJa,

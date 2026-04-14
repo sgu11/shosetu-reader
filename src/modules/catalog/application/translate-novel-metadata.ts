@@ -1,7 +1,10 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { novels, titleTranslationCache } from "@/lib/db/schema";
-import { env } from "@/lib/env";
+import { env, resolveModel } from "@/lib/env";
+import { logger } from "@/lib/logger";
+import { recordOpenRouterError, recordOpenRouterUsage } from "@/lib/ops-metrics";
+import { estimateCost } from "@/modules/translation/application/cost-estimation";
 
 /**
  * Translate a novel's title and summary from Japanese to Korean
@@ -39,7 +42,7 @@ export async function translateNovelMetadata(novelId: string): Promise<void> {
       "X-Title": "Shosetu Reader",
     },
     body: JSON.stringify({
-      model: env.OPENROUTER_DEFAULT_MODEL,
+      model: resolveModel("title"),
       messages: [
         {
           role: "system",
@@ -55,11 +58,27 @@ export async function translateNovelMetadata(novelId: string): Promise<void> {
     }),
   });
 
-  if (!res.ok) return;
+  if (!res.ok) {
+    await recordOpenRouterError("catalog.metadata-translation", res.status);
+    return;
+  }
 
   const data = await res.json();
   const content = data.choices?.[0]?.message?.content;
   if (!content) return;
+
+  const inputTokens = data.usage?.prompt_tokens;
+  const outputTokens = data.usage?.completion_tokens;
+  if (inputTokens != null && outputTokens != null) {
+    const costUsd = await estimateCost(resolveModel("title"), inputTokens, outputTokens);
+    await recordOpenRouterUsage({
+      operation: "catalog.metadata-translation",
+      modelName: resolveModel("title"),
+      inputTokens,
+      outputTokens,
+      costUsd,
+    });
+  }
 
   try {
     // Extract JSON from response (handle markdown code blocks)
@@ -86,7 +105,9 @@ export async function translateNovelMetadata(novelId: string): Promise<void> {
       await db.insert(titleTranslationCache).values(cacheRows).onConflictDoNothing();
     }
   } catch {
-    // JSON parse failed — silently skip
+    logger.warn("Failed to parse translated novel metadata response", {
+      novelId,
+    });
   }
 }
 

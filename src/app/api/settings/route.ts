@@ -10,7 +10,7 @@ const READ_LIMIT = { limit: 30, windowSeconds: 60 };
 const WRITE_LIMIT = { limit: 10, windowSeconds: 60 };
 
 export async function GET(req: NextRequest) {
-  const limited = rateLimit(req, READ_LIMIT, "settings-r");
+  const limited = await rateLimit(req, READ_LIMIT, "settings-r");
   if (limited) return limited;
   try {
     const userId = await resolveUserId();
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const limited = rateLimit(req, WRITE_LIMIT, "settings-w");
+  const limited = await rateLimit(req, WRITE_LIMIT, "settings-w");
   if (limited) return limited;
 
   try {

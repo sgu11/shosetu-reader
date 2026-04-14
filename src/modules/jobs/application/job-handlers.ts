@@ -1,8 +1,13 @@
+import { eq } from "drizzle-orm";
+import { getDb } from "@/lib/db/client";
+import { episodes } from "@/lib/db/schema";
+import { translateTexts } from "@/lib/translate-cache";
 import {
   fetchPendingEpisodes,
 } from "@/modules/catalog/application/ingest-episodes";
 import { refreshSubscribedNovelMetadata } from "@/modules/catalog/application/refresh-metadata";
 import { extractGlossaryTerms, type ExtractGlossaryPayload } from "@/modules/translation/application/extract-glossary";
+import { generateGlossary } from "@/modules/translation/application/generate-glossary";
 import { requestTranslation, processQueuedTranslation, type TranslationJobPayload } from "@/modules/translation/application/request-translation";
 import { advanceSession, generateSessionSummary, type SessionAdvancePayload, type SessionSummaryPayload } from "@/modules/translation/application/translation-sessions";
 import type { JobExecutionContext } from "./job-queue";
@@ -26,6 +31,11 @@ export interface MetadataRefreshPayload {
   triggeredBy: "schedule" | "manual";
 }
 
+export interface GlossaryGeneratePayload {
+  novelId: string;
+  modelName?: string;
+}
+
 type JobHandler<TPayload = unknown> = (
   payload: TPayload,
   context: JobExecutionContext<TPayload>,
@@ -36,6 +46,7 @@ const jobHandlers: {
 } = {
   "catalog.ingest-all": handleIngestAll as JobHandler<unknown>,
   "catalog.metadata-refresh": handleMetadataRefresh as JobHandler<unknown>,
+  "glossary.generate": handleGlossaryGenerate as JobHandler<unknown>,
   "glossary.extract": handleGlossaryExtract as JobHandler<unknown>,
   "translation.bulk-translate-all": handleBulkTranslateAll as JobHandler<unknown>,
   "translation.episode": handleEpisodeTranslation as JobHandler<unknown>,
@@ -71,6 +82,23 @@ async function handleIngestAll(
       });
     },
   );
+
+  // Batch-translate episode titles so first novel page load is instant
+  try {
+    const db = getDb();
+    const episodeRows = await db
+      .select({ titleJa: episodes.titleJa })
+      .from(episodes)
+      .where(eq(episodes.novelId, payload.novelId));
+    const titles = episodeRows
+      .map((r) => r.titleJa)
+      .filter((t): t is string => t != null && t.trim() !== "");
+    if (titles.length > 0) {
+      await translateTexts(titles);
+    }
+  } catch {
+    // Non-fatal — titles will be translated on demand
+  }
 
   return {
     stage: "completed",
@@ -156,6 +184,30 @@ async function handleGlossaryExtract(
   return {
     stage: "completed",
     ...result,
+  };
+}
+
+async function handleGlossaryGenerate(
+  payload: GlossaryGeneratePayload,
+  context: JobExecutionContext<GlossaryGeneratePayload>,
+) {
+  await context.updateProgress({
+    stage: "generating",
+    processed: 0,
+    total: 1,
+  });
+
+  const result = await generateGlossary(payload.novelId, payload.modelName);
+
+  return {
+    stage: "completed",
+    processed: 1,
+    total: 1,
+    glossary: result.glossary,
+    modelName: result.modelName,
+    episodeCount: result.episodeCount,
+    entriesImported: result.entriesImported,
+    entriesSkipped: result.entriesSkipped,
   };
 }
 

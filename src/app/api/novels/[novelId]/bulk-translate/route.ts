@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
+import { acquireRequestDeduplicationLock } from "@/lib/request-dedupe";
 import { episodes } from "@/lib/db/schema";
 import { requestTranslation } from "@/modules/translation/application/request-translation";
 import { rateLimit } from "@/lib/rate-limit";
@@ -19,7 +20,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ novelId: string }> },
 ) {
-  const limited = rateLimit(request, RATE_LIMIT, "bulk-translate");
+  const limited = await rateLimit(request, RATE_LIMIT, "bulk-translate");
   if (limited) return limited;
 
   const { novelId } = await params;
@@ -29,6 +30,14 @@ export async function POST(
 
   const limitParam = request.nextUrl.searchParams.get("limit");
   const limit = Math.min(Math.max(parseInt(limitParam ?? "10", 10) || 10, 1), 50);
+
+  const dedupe = await acquireRequestDeduplicationLock({
+    scope: `bulk-translate:${novelId}:${limit}`,
+    ttlMs: 10_000,
+  });
+  if (!dedupe.acquired) {
+    return NextResponse.json({ error: "Bulk translation was requested recently" }, { status: 409 });
+  }
 
   const db = getDb();
 

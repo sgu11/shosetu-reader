@@ -1,4 +1,5 @@
 import {
+  index,
   integer,
   pgTable,
   text,
@@ -33,6 +34,15 @@ export const episodes = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    index("episodes_novel_number_idx").on(
+      table.novelId,
+      table.episodeNumber,
+    ),
+    index("episodes_novel_fetch_number_idx").on(
+      table.novelId,
+      table.fetchStatus,
+      table.episodeNumber,
+    ),
     uniqueIndex("episodes_novel_source_idx").on(
       table.novelId,
       table.sourceEpisodeId,

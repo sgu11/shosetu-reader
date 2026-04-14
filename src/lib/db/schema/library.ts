@@ -1,5 +1,6 @@
 import {
   boolean,
+  integer,
   pgTable,
   real,
   text,
@@ -24,6 +25,7 @@ export const subscriptions = pgTable(
       .notNull()
       .defaultNow(),
     lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    lastCheckedEpisodeCount: integer("last_checked_episode_count"),
   },
   (table) => [
     uniqueIndex("subscriptions_novel_idx").on(table.novelId),

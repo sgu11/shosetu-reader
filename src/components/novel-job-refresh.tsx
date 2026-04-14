@@ -1,92 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslation } from "@/lib/i18n/client";
 
 interface Props {
-  novelId: string;
-}
-
-export function NovelJobRefresh({ novelId }: Props) {
-  const router = useRouter();
-  const { t } = useTranslation();
-  const [job, setJob] = useState<{
+  job: {
     id: string;
     jobType: string;
     status: string;
     result: {
-      processed: number | null;
-      total: number | null;
-      fetched: number | null;
-      failed: number | null;
-      queued: number | null;
+      processed?: number | null;
+      total?: number | null;
+      fetched?: number | null;
+      failed?: number | null;
+      queued?: number | null;
     } | null;
-  } | null>(null);
+  } | null;
+}
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function pollCurrentJob() {
-      try {
-        const res = await fetch(`/api/novels/${novelId}/jobs/current`);
-        if (!res.ok) {
-          if (!cancelled) {
-            setJob(null);
-          }
-          return;
-        }
-
-        const data = await res.json();
-        if (!data.job?.id) {
-          if (!cancelled) {
-            setJob(null);
-          }
-          return;
-        }
-
-        const jobRes = await fetch(`/api/jobs/${data.job.id}`);
-        if (!jobRes.ok) {
-          if (!cancelled) {
-            setJob(null);
-          }
-          return;
-        }
-
-        const jobData = await jobRes.json();
-        if (!cancelled) {
-          setJob({
-            id: jobData.id,
-            jobType: jobData.jobType,
-            status: jobData.status,
-            result: jobData.result ?? null,
-          });
-        }
-
-        if (document.visibilityState === "visible") {
-          router.refresh();
-        }
-      } catch {
-        if (!cancelled) {
-          setJob(null);
-        }
-      }
-    }
-
-    void pollCurrentJob();
-    const interval = window.setInterval(() => {
-      if (document.visibilityState !== "visible") {
-        return;
-      }
-
-      void pollCurrentJob();
-    }, 5000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [novelId, router]);
+export function NovelJobRefresh({ job }: Props) {
+  const { t } = useTranslation();
 
   if (!job) {
     return null;
@@ -112,6 +44,8 @@ export function NovelJobRefresh({ novelId }: Props) {
     if ((job.result?.failed ?? 0) > 0) {
       detail += `, ${t("status.failedCount", { count: job.result?.failed ?? 0 })}`;
     }
+  } else if (job.jobType === "glossary.generate") {
+    detail = t("status.jobWorking");
   }
 
   return (

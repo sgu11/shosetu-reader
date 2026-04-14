@@ -59,6 +59,7 @@ export const dictionaries = {
     "library.eps": "eps",
     "library.completed": "Completed",
     "library.ongoing": "Ongoing",
+    "library.newEpisodes": "New",
     "library.ep": "Ep.",
 
     // Novel detail
@@ -353,6 +354,7 @@ export const dictionaries = {
     "library.eps": "화",
     "library.completed": "완결",
     "library.ongoing": "연재 중",
+    "library.newEpisodes": "새 에피소드",
     "library.ep": "화",
 
     // Novel detail

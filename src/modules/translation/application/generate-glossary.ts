@@ -1,7 +1,9 @@
 import { eq, and, asc, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { episodes, translations, novelGlossaries, novelGlossaryEntries } from "@/lib/db/schema";
-import { env } from "@/lib/env";
+import { env, resolveModel } from "@/lib/env";
+import { logger } from "@/lib/logger";
+import { recordOpenRouterError, recordOpenRouterUsage } from "@/lib/ops-metrics";
 import { estimateCost } from "./cost-estimation";
 import { importGlossaryEntries, type GlossaryEntryInput } from "./glossary-entries";
 
@@ -127,7 +129,7 @@ export async function generateGlossary(
     return `${header}\n\n[Japanese]\n${jpTruncated}\n\n[Korean Translation]\n${krTruncated}`;
   }).join("\n\n");
 
-  const modelName = modelOverride || env.OPENROUTER_DEFAULT_MODEL;
+  const modelName = modelOverride || resolveModel("extraction");
   const apiKey = env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
@@ -159,6 +161,7 @@ export async function generateGlossary(
 
   if (!res.ok) {
     const errorBody = await res.text();
+    await recordOpenRouterError("glossary.generate", res.status);
     throw new Error(`OpenRouter API error ${res.status}: ${errorBody.slice(0, 200)}`);
   }
 
@@ -175,6 +178,13 @@ export async function generateGlossary(
   const genOutputTokens = data.usage?.completion_tokens;
   if (genInputTokens != null && genOutputTokens != null) {
     generationCostUsd = await estimateCost(modelName, genInputTokens, genOutputTokens);
+    await recordOpenRouterUsage({
+      operation: "glossary.generate",
+      modelName,
+      inputTokens: genInputTokens,
+      outputTokens: genOutputTokens,
+      costUsd: generationCostUsd,
+    });
   }
 
   // Parse JSON response
@@ -201,7 +211,9 @@ export async function generateGlossary(
         rawEntries = Array.isArray(parsed.entries) ? parsed.entries : [];
         styleGuide = typeof parsed.style_guide === "string" ? parsed.style_guide.trim() : "";
       } catch {
-        console.error("Failed to parse glossary generation response:", content.slice(0, 500));
+        logger.warn("Failed to parse glossary generation response", {
+          preview: content.slice(0, 500),
+        });
         // Fall back to storing entire content as style guide
         styleGuide = content.trim();
       }

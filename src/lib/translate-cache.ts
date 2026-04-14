@@ -1,7 +1,10 @@
 import { inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { titleTranslationCache } from "@/lib/db/schema";
-import { env } from "@/lib/env";
+import { env, resolveModel } from "@/lib/env";
+import { logger } from "@/lib/logger";
+import { recordOpenRouterError, recordOpenRouterUsage } from "@/lib/ops-metrics";
+import { estimateCost } from "@/modules/translation/application/cost-estimation";
 
 const BATCH_SIZE = 50;
 const NUMBER_ONLY = /^\d+$/;
@@ -71,7 +74,7 @@ async function translateBatch(texts: string[]): Promise<string[]> {
         "X-Title": "Shosetu Reader",
       },
       body: JSON.stringify({
-        model: env.OPENROUTER_DEFAULT_MODEL,
+        model: resolveModel("title"),
         messages: [
           {
             role: "system",
@@ -89,17 +92,33 @@ async function translateBatch(texts: string[]): Promise<string[]> {
     });
 
     if (!res.ok) {
+      await recordOpenRouterError("title-translation.batch", res.status);
       if (RETRYABLE.has(res.status) && attempt < MAX_RETRIES) {
         const delay = Math.pow(2, attempt) * 1000;
         await new Promise((r) => setTimeout(r, delay));
         continue;
       }
-      console.error("OpenRouter batch translation failed:", res.status);
+      logger.warn("OpenRouter batch title translation failed", {
+        status: res.status,
+      });
       return texts;
     }
 
     const data = await res.json();
     const content: string = data.choices?.[0]?.message?.content ?? "";
+    const inputTokens = data.usage?.prompt_tokens;
+    const outputTokens = data.usage?.completion_tokens;
+
+    if (inputTokens != null && outputTokens != null) {
+      const costUsd = await estimateCost(resolveModel("title"), inputTokens, outputTokens);
+      await recordOpenRouterUsage({
+        operation: "title-translation.batch",
+        modelName: resolveModel("title"),
+        inputTokens,
+        outputTokens,
+        costUsd,
+      });
+    }
 
     const translated: Record<number, string> = {};
     for (const line of content.split("\n")) {
