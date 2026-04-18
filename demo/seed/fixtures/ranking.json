@@ -1,0 +1,17 @@
+{
+  "daily": [
+    { "rank": 1, "ncode": "n0001aa", "title_ja": "聖女の物語", "title_ko": "성녀의 이야기", "author_ja": "著者A" },
+    { "rank": 2, "ncode": "n0002bb", "title_ja": "剣と魔法の国", "title_ko": "검과 마법의 나라", "author_ja": "著者B" },
+    { "rank": 3, "ncode": "n0003cc", "title_ja": "転生したら猫だった", "title_ko": "환생했더니 고양이였다", "author_ja": "著者C" }
+  ],
+  "weekly": [
+    { "rank": 1, "ncode": "n0010dd", "title_ja": "星降る夜に", "title_ko": "별이 내리는 밤에", "author_ja": "著者D" },
+    { "rank": 2, "ncode": "n0011ee", "title_ja": "王都の影", "title_ko": "왕도의 그림자", "author_ja": "著者E" }
+  ],
+  "monthly": [
+    { "rank": 1, "ncode": "n0100ff", "title_ja": "月下の誓い", "title_ko": "달빛 아래의 맹세", "author_ja": "著者F" }
+  ],
+  "quarterly": [
+    { "rank": 1, "ncode": "n1000gg", "title_ja": "最後の魔女", "title_ko": "마지막 마녀", "author_ja": "著者G" }
+  ]
+}

@@ -1,0 +1,7 @@
+[
+  { "id": "demo-ep-1", "novel_id": "demo-novel-1", "number": 1, "title_ja": "第一話 出会い", "body_ja": "朝の光が差し込む教室で、彼女は静かに本を開いた。" },
+  { "id": "demo-ep-2", "novel_id": "demo-novel-1", "number": 2, "title_ja": "第二話 再会", "body_ja": "駅のホームで、ふたりは偶然再会する。" },
+  { "id": "demo-ep-3", "novel_id": "demo-novel-1", "number": 3, "title_ja": "第三話 約束", "body_ja": "夕暮れの河原で、彼らは小さな約束を交わした。" },
+  { "id": "demo-ep-4", "novel_id": "demo-novel-1", "number": 4, "title_ja": "第四話 別れ", "body_ja": "別れの日は、思っていたよりも穏やかだった。" },
+  { "id": "demo-ep-5", "novel_id": "demo-novel-1", "number": 5, "title_ja": "第五話 帰還", "body_ja": "長い旅路の果て、彼は故郷の空を見上げた。" }
+]
