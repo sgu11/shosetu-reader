@@ -1,38 +1,43 @@
 # Dev Loop Harness
 
-Last updated: 2026-04-11
+Last updated: 2026-04-17
 
-## Current Local Baseline
+## Purpose
 
-- Node: `v25.9.0`
-- pnpm: `10.33.0`
-- `.env`: present
-- PostgreSQL CLI: available via `psql`
-- Docker: not installed in this environment
-- Browser automation runtime: not installed yet
-- Repo health at prep time:
-  - `pnpm check` ✅
-  - `pnpm test` ✅
-  - `pnpm build` ✅
+This document tracks the local verification loop for the current codebase. It
+should answer two questions quickly:
+
+1. Which commands define a healthy local iteration loop?
+2. What should we test next as V5 work begins?
+
+## Current Verification Baseline
+
+- `.env.example` includes local `DATABASE_URL`, `REDIS_URL`, and OpenRouter model defaults.
+- Async job flows require both `pnpm dev` and `pnpm worker`.
+- `scripts/dev-smoke.mjs` exercises core HTTP health and profile/library paths.
+- Playwright smoke coverage lives in `tests/browser/smoke.spec.ts`.
+
+Latest verified checks for this doc refresh:
+
+- `pnpm typecheck`
+- `pnpm test` (`61` tests across `11` files)
+- `pnpm build`
+
+Current known issue:
+
+- `pnpm test:browser` is not green in this environment right now. On
+  2026-04-17, the Playwright-managed `pnpm dev` server emitted repeated startup
+  warnings and all four smoke tests timed out on initial `page.goto(...)` with
+  `net::ERR_ABORTED`.
 
 ## Harness Commands
 
 - Start app: `pnpm dev`
-- Static + test + production verification: `pnpm dev:verify`
+- Start worker: `pnpm worker`
+- Static + unit + build verification: `pnpm dev:verify`
 - Runtime smoke checks against a running local server: `pnpm dev:smoke`
-- Browser smoke checks with managed local server: `pnpm test:browser`
+- Browser smoke checks with a managed local server: `pnpm test:browser`
 - Full local iteration loop: `pnpm dev:loop`
-
-`pnpm dev:smoke` checks:
-- `GET /api/health`
-- `GET /api/profiles/active`
-- `GET /api/library`
-- `GET /api/jobs/:missing-id` returns `404`
-
-`pnpm test:browser` checks:
-- home navigation renders
-- library page renders
-- profiles page renders and create control is visible
 
 If the app is not running on `http://localhost:3000`, set `APP_URL`:
 
@@ -40,103 +45,77 @@ If the app is not running on `http://localhost:3000`, set `APP_URL`:
 APP_URL=http://localhost:3001 pnpm dev:smoke
 ```
 
-## Browser Tooling
+## Smoke Coverage Today
 
-Playwright is installed and Chromium is available locally.
+### `pnpm dev:smoke`
 
-Current browser coverage is intentionally small and safe:
-- home
-- library
-- profiles
+- `GET /api/health`
+- `GET /api/profiles/active`
+- `GET /api/library`
+- `GET /api/jobs/:missing-id` returns `404`
 
-Recommended next browser expansions:
-- profile switching updates top-bar badge
-- job progress reconnect after reload
-- reader preserves KR while retranslate runs
+### `pnpm test:browser`
 
-## V2 Fix Loop Plan
+- Home, library, and profiles navigation renders
+- Creating a profile updates the visible active-profile state
+- Navigation stays usable on a small screen
+- Profile creation shows friendly validation feedback
 
-This plan is derived from the current V2 review and is ordered for maximum product impact.
+## Recommended Next Browser Expansions
 
-### Track 1: Security and Data Exposure
+- Novel detail live-status card updates cleanly while a job is running
+- Reader keeps a readable KR translation mounted while a re-translation is in flight
+- Quality warning badges appear when a translation has `quality_warnings`
+- `hasNewEpisodes` badge clears correctly after visiting a novel detail page
 
-1. Scope `/api/jobs/[jobId]` to the active profile or a safe public summary.
-2. Remove raw payload exposure from public job responses.
-3. Add ownership checks for novel/job operations where profile data is involved.
+## Current Loop Targets
 
-Acceptance:
-- A job ID from one profile cannot expose another profile’s job metadata.
-- Public job responses contain only user-safe fields.
+### Target 1: V5.1 Quality Warnings Dashboard
 
-### Track 2: Reader Translation Continuity
-
-1. Keep the currently displayed available KR translation mounted while a retranslation is queued/processing.
-2. Separate `displayedTranslation` from `pendingTranslation` in the client state.
-3. Add regression coverage for “retranslate while readable KR exists”.
+Why first:
+- The backend already stores `quality_warnings` and exposes admin APIs.
+- It adds immediate user-visible value without requiring pipeline changes.
 
 Acceptance:
-- Starting a retranslation never forces the reader back to JA if a readable KR translation already exists.
+- Novel detail shows aggregated warning counts.
+- Episodes with warning/error states are visibly identifiable.
+- Reader surfaces a non-intrusive warning when the displayed translation has issues.
 
-### Track 3: Profile UX Reliability
+### Target 2: V5.3 Selective Re-ingest
 
-1. Make profile create/select/guest-switch optimistic and self-refreshing.
-2. Add visible error states and success feedback to `/profiles` and the top-bar profile switcher.
-3. Ensure active profile state updates immediately after changes without requiring a full reload.
-
-Acceptance:
-- The active profile badge updates immediately after profile changes.
-- Failures are visible and actionable instead of silent.
-
-### Track 4: Background Job UX and Reconnection
-
-1. Persist last active job IDs per novel page or rediscover them from server state.
-2. Reconnect polling after refresh/navigation.
-3. Show clearer running/completed/failed status in novel detail without relying on transient button text.
+Why next:
+- It reduces avoidable Syosetu traffic and shortens long-running maintenance jobs.
+- It improves an existing costly workflow instead of introducing a brand-new subsystem.
 
 Acceptance:
-- Refreshing the novel page during an active job preserves progress visibility.
+- `reingest-all` reports changed vs unchanged counts.
+- Unchanged episodes are skipped when upstream metadata or checksums match.
 
-### Track 5: Localization and Status Language
+### Target 3: V5.4 Reading Statistics
 
-1. Replace raw status strings (`queued`, `failed`, `fetched`) with localized labels.
-2. Standardize status wording across library, novel detail, reader, and job progress.
-
-Acceptance:
-- Korean UI contains no raw English workflow labels outside model IDs.
-
-### Track 6: Mobile and Density Pass
-
-1. Make the top nav responsive.
-2. Reduce badge density on library and novel detail cards.
-3. Improve hierarchy for model/cost/status chips on narrow screens.
+Why third:
+- It is a low-risk user-facing feature built on existing data.
+- It expands the product surface without destabilizing translation flows.
 
 Acceptance:
-- Key screens remain readable and navigable on mobile widths.
-
-### Track 7: Error Handling and Feedback
-
-1. Replace silent catches in profile and reader-related UI with visible feedback.
-2. Add retry affordances where actions fail.
-
-Acceptance:
-- User-triggered actions always end in visible success, failure, or in-progress feedback.
+- `/stats` (or equivalent) shows episodes read, streaks, and model/cost rollups.
+- Queries stay bounded and use existing indexes or targeted new ones.
 
 ## Recommended Loop Cadence
 
 For each slice:
 
-1. Implement one track item.
-2. Run `pnpm check`
+1. Implement one focused change.
+2. Run `pnpm typecheck`
 3. Run `pnpm test`
 4. Run `pnpm build`
-5. Run `pnpm test:browser`
-6. Optionally run `pnpm dev:smoke` against an already running server for targeted API debugging.
+5. Run `pnpm test:browser` when UI behavior changes, after the browser harness is stable again
+6. Run `pnpm dev:smoke` when API or runtime wiring changes
 
 ## Suggested First Iteration
 
-Start with:
-1. Track 1: secure `/api/jobs/[jobId]`
-2. Track 2: fix KR continuity during retranslate
-3. Track 3: fix stale profile switcher state
+Start with V5.1:
 
-That gives the best mix of correctness, trust, and visible UX improvement.
+1. Add a novel-detail warning summary fed by existing `quality_warnings`.
+2. Add a small reader-level warning indicator for the selected translation.
+3. Extend Playwright coverage to assert the warning surface appears when seeded data includes warnings.
