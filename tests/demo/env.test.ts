@@ -15,7 +15,9 @@ describe("env demo flags", () => {
   });
 
   it("exposes DEMO_FIXTURES_PATH default", async () => {
+    vi.resetModules();
+    delete process.env.DEMO_MODE;
     const mod = await import("@/lib/env");
-    expect(mod.env.DEMO_FIXTURES_PATH).toMatch(/demo\/seed\/fixtures$/);
+    expect(mod.env.DEMO_FIXTURES_PATH).toBe("demo/seed/fixtures");
   });
 });
