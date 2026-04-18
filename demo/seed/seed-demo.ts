@@ -9,7 +9,12 @@ import {
   translations,
   novelGlossaries,
   novelGlossaryEntries,
+  subscriptions,
+  readingProgress,
+  users,
 } from "@/lib/db/schema";
+
+const DEMO_USER_ID = "00000000-0000-4000-a000-000000000001";
 
 type NovelFixture = {
   id: string;
@@ -73,7 +78,9 @@ export async function seedDemo() {
   const db = getDb();
 
   await db.transaction(async (tx) => {
-    // Delete in FK order (translations → glossary entries → glossary parent → episodes → novel)
+    // Delete in FK order
+    await tx.delete(readingProgress).where(eq(readingProgress.novelId, novel.id));
+    await tx.delete(subscriptions).where(eq(subscriptions.novelId, novel.id));
     for (const ep of epJa) {
       await tx.delete(translations).where(eq(translations.episodeId, ep.id));
     }
@@ -81,6 +88,17 @@ export async function seedDemo() {
     await tx.delete(novelGlossaries).where(eq(novelGlossaries.novelId, novel.id));
     await tx.delete(episodes).where(eq(episodes.novelId, novel.id));
     await tx.delete(novels).where(eq(novels.id, novel.id));
+
+    await tx
+      .insert(users)
+      .values({
+        id: DEMO_USER_ID,
+        email: "demo@shosetu-reader.local",
+        displayName: "Demo Reader",
+        preferredUiLocale: "ko",
+        preferredReaderLanguage: "ko",
+      })
+      .onConflictDoNothing();
 
     await tx.insert(novels).values({
       id: novel.id,
@@ -140,6 +158,20 @@ export async function seedDemo() {
         })),
       );
     }
+
+    await tx.insert(subscriptions).values({
+      novelId: novel.id,
+      isActive: true,
+      lastCheckedEpisodeCount: novel.total_episodes,
+    });
+
+    await tx.insert(readingProgress).values({
+      userId: DEMO_USER_ID,
+      novelId: novel.id,
+      currentEpisodeId: epJa[1]?.id ?? epJa[0].id,
+      currentLanguage: "ko",
+      progressPercent: 0.35,
+    });
   });
 }
 

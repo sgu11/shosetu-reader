@@ -55,5 +55,26 @@ done
 echo "==> webreel record (auto-downloads chromium + ffmpeg on first run)"
 npx webreel record --config demo/webreel.config.json --verbose
 
+# webreel resolves outDir relative to the config file, so segments land in demo/output/
+SEGMENT_DIR="demo/output"
+FFMPEG="$HOME/.webreel/bin/ffmpeg/ffmpeg"
+if [[ ! -x "$FFMPEG" ]]; then
+  FFMPEG="ffmpeg"
+fi
+
+echo "==> concatenate segments into shosetu-demo.mp4"
+CONCAT_LIST="$SEGMENT_DIR/concat.txt"
+: > "$CONCAT_LIST"
+for seg in 01-home 02-library 03-novel 04-reader-1 05-reader-3 06-outro; do
+  if [[ ! -f "$SEGMENT_DIR/$seg.mp4" ]]; then
+    echo "missing segment: $seg.mp4" >&2
+    exit 1
+  fi
+  echo "file '$(cd "$SEGMENT_DIR" && pwd)/$seg.mp4'" >> "$CONCAT_LIST"
+done
+
+"$FFMPEG" -y -hide_banner -loglevel error \
+  -f concat -safe 0 -i "$CONCAT_LIST" -c copy "$SEGMENT_DIR/shosetu-demo.mp4"
+
 echo "==> done"
-ls -la demo/output/shosetu-demo.mp4
+ls -la "$SEGMENT_DIR/shosetu-demo.mp4"
