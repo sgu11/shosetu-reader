@@ -141,6 +141,13 @@
       "when": 1776500000000,
       "tag": "0019_v4_new_episodes_and_budget",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1777000000000,
+      "tag": "0020_reading_events",
+      "breakpoints": true
     }
   ]
 }

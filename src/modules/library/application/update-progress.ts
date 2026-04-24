@@ -1,8 +1,10 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { readingProgress, episodes } from "@/lib/db/schema";
+import { readingProgress, readingEvents, episodes } from "@/lib/db/schema";
 import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
 import type { UpdateProgressInput } from "../api/schemas";
+
+const EVENT_DEDUPE_WINDOW_MS = 60_000;
 
 export async function updateReadingProgress(
   input: UpdateProgressInput,
@@ -58,4 +60,37 @@ export async function updateReadingProgress(
       lastReadAt: now,
     });
   }
+
+  await recordReadingEvent(userId, episode.novelId, input.episodeId, now);
+}
+
+async function recordReadingEvent(
+  userId: string,
+  novelId: string,
+  episodeId: string,
+  now: Date,
+): Promise<void> {
+  const db = getDb();
+  const windowStart = new Date(now.getTime() - EVENT_DEDUPE_WINDOW_MS);
+  const [recent] = await db
+    .select({ id: readingEvents.id })
+    .from(readingEvents)
+    .where(
+      and(
+        eq(readingEvents.userId, userId),
+        eq(readingEvents.episodeId, episodeId),
+        gte(readingEvents.createdAt, windowStart),
+      ),
+    )
+    .limit(1);
+
+  if (recent) return;
+
+  await db.insert(readingEvents).values({
+    userId,
+    novelId,
+    episodeId,
+    eventKind: "opened",
+    createdAt: now,
+  });
 }

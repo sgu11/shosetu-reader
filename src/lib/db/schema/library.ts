@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   pgTable,
   real,
@@ -60,6 +61,34 @@ export const readingProgress = pgTable(
     uniqueIndex("reading_progress_user_novel_idx").on(
       table.userId,
       table.novelId,
+    ),
+  ],
+);
+
+export const readingEvents = pgTable(
+  "reading_events",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    novelId: uuid("novel_id")
+      .notNull()
+      .references(() => novels.id, { onDelete: "cascade" }),
+    episodeId: uuid("episode_id")
+      .notNull()
+      .references(() => episodes.id, { onDelete: "cascade" }),
+    eventKind: text("event_kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("reading_events_user_created_idx").on(table.userId, table.createdAt),
+    index("reading_events_user_episode_created_idx").on(
+      table.userId,
+      table.episodeId,
+      table.createdAt,
     ),
   ],
 );
