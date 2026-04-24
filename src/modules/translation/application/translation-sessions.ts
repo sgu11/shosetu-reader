@@ -25,9 +25,27 @@ export interface SessionAdvancePayload {
   episodeIds: string[];
   currentIndex: number;
   reorderAttempts?: number;
+  /** Number of transient upstream failures on the current episode. */
+  translationAttempts?: number;
 }
 
 const MAX_REORDER_RETRIES = 5;
+const MAX_TRANSIENT_TRANSLATION_RETRIES = 4;
+
+/**
+ * Classify whether a translation error looks transient (upstream rate limit,
+ * provider outage, empty response) and therefore worth retrying the same
+ * episode, versus permanent (malformed request, auth, schema) where we should
+ * skip the episode and advance the session.
+ */
+function isTransientTranslationError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/\b(429|502|503|504)\b/.test(msg)) return true;
+  if (/rate[- ]?limit/i.test(msg)) return true;
+  if (/No translation content/i.test(msg)) return true;
+  if (/timed? out|timeout|ETIMEDOUT|ECONNRESET/i.test(msg)) return true;
+  return false;
+}
 
 export interface SessionSummaryPayload {
   sessionId: string;
@@ -319,20 +337,65 @@ export async function advanceSession(
       contextSummary: session.contextSummary ?? undefined,
     });
   } catch (err) {
-    logger.error("Session translation failed", {
-      sessionId: payload.sessionId,
-      episodeId,
-      error: err instanceof Error ? err.message : "Unknown error",
-    });
-    // Mark translation as failed
-    if (translationId) {
+    const errorMsg = err instanceof Error ? err.message : "Unknown error";
+    const transient = isTransientTranslationError(err);
+    const attempts = (payload.translationAttempts ?? 0) + 1;
+    const jobQueue = getJobQueue();
+
+    if (transient && attempts <= MAX_TRANSIENT_TRANSLATION_RETRIES) {
+      // Reset translation row to queued so the next advance can re-run it.
       await db
         .update(translations)
-        .set({ status: "failed", errorMessage: "Session advance failed", updatedAt: new Date() })
+        .set({
+          status: "queued",
+          errorCode: null,
+          errorMessage: null,
+          processingStartedAt: null,
+          durationMs: null,
+          updatedAt: new Date(),
+        })
         .where(eq(translations.id, translationId));
+      // Exponential backoff: 15s, 30s, 60s, 120s (upstream rate windows).
+      const delayMs = 15_000 * Math.pow(2, attempts - 1);
+      logger.warn("Session translation transient failure; backing off same episode", {
+        sessionId: payload.sessionId,
+        episodeId,
+        attempts,
+        delayMs,
+        error: errorMsg,
+      });
+      await jobQueue.enqueue(
+        "translation.session-advance",
+        {
+          ...payload,
+          translationAttempts: attempts,
+        } as SessionAdvancePayload,
+        {
+          entityType: "novel",
+          entityId: payload.novelId,
+          delayMs,
+        },
+      );
+      return;
     }
-    // Continue to next episode even on failure
-    const jobQueue = getJobQueue();
+
+    // Permanent failure (or transient retries exhausted) — mark failed and advance.
+    logger.error("Session translation failed; advancing past episode", {
+      sessionId: payload.sessionId,
+      episodeId,
+      attempts,
+      transient,
+      error: errorMsg,
+    });
+    await db
+      .update(translations)
+      .set({
+        status: "failed",
+        errorCode: transient ? "TRANSIENT_EXHAUSTED" : "SESSION_ADVANCE_FAILED",
+        errorMessage: errorMsg.slice(0, 1000),
+        updatedAt: new Date(),
+      })
+      .where(eq(translations.id, translationId));
     await db
       .update(translationSessions)
       .set({ expectedNextIndex: payload.currentIndex + 1, updatedAt: new Date() })
@@ -342,6 +405,7 @@ export async function advanceSession(
       {
         ...payload,
         currentIndex: payload.currentIndex + 1,
+        translationAttempts: 0,
       } as SessionAdvancePayload,
       {
         entityType: "novel",

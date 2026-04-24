@@ -136,7 +136,10 @@ export class OpenRouterProvider implements TranslationProvider {
         const errorBody = await res.text();
         await recordOpenRouterError("translation.episode", res.status);
         if (RETRYABLE.has(res.status) && attempt < MAX_RETRIES) {
-          const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+          // Longer base for upstream rate limits since provider windows are
+          // usually 30-60s. Jitter prevents thundering-herd across workers.
+          const base = res.status === 429 ? 5000 : 1000;
+          const delay = base * Math.pow(2, attempt) + Math.floor(Math.random() * 1000);
           await new Promise((r) => setTimeout(r, delay));
           continue;
         }
@@ -167,7 +170,19 @@ export class OpenRouterProvider implements TranslationProvider {
       const finishReason = data.choices?.[0]?.finish_reason as string | undefined;
 
       if (!content) {
-        throw new Error("No translation content in OpenRouter response");
+        // Surface the finish_reason so session-level handling can classify
+        // content_filter / length / error vs a genuinely transient empty body.
+        // Also retry once if this looks transient (e.g. finish_reason=error).
+        const diag = `finish_reason=${finishReason ?? "null"} choices=${data.choices?.length ?? 0}`;
+        if (
+          (finishReason === undefined || finishReason === "error") &&
+          attempt < MAX_RETRIES
+        ) {
+          const delay = 2000 * Math.pow(2, attempt) + Math.floor(Math.random() * 1000);
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+        throw new Error(`No translation content in OpenRouter response (${diag})`);
       }
 
       // Retry with progressively higher max_tokens when output is truncated.
