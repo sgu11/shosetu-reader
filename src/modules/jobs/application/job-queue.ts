@@ -12,6 +12,7 @@ export interface JobExecutionContext<TPayload = unknown> {
 export interface JobEnqueueOptions {
   entityType?: string;
   entityId?: string;
+  delayMs?: number;
 }
 
 export interface JobQueue {

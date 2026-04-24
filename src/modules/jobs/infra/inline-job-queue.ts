@@ -46,9 +46,10 @@ export class InlineJobQueue implements JobQueue {
       kind: job.kind,
     });
 
+    const delayMs = options?.delayMs ?? 0;
     setTimeout(() => {
       void this.run(job);
-    }, 0);
+    }, delayMs);
 
     return job;
   }

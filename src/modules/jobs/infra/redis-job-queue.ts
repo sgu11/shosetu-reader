@@ -1,6 +1,9 @@
 import { randomUUID } from "crypto";
 import { logger } from "@/lib/logger";
-import { publishJobToQueue } from "../application/job-runtime";
+import {
+  publishJobToQueue,
+  publishJobWithDelay,
+} from "../application/job-runtime";
 import type { JobEnqueueOptions, JobQueue } from "../application/job-queue";
 import { createJobRun } from "../application/job-runs";
 import type { EnqueuedJob } from "../domain/enqueued-job";
@@ -30,7 +33,11 @@ export class RedisJobQueue implements JobQueue {
       entityId: job.entityId ?? undefined,
     });
 
-    await publishJobToQueue(job.id);
+    if (options?.delayMs) {
+      await publishJobWithDelay(job.id, options.delayMs);
+    } else {
+      await publishJobToQueue(job.id);
+    }
 
     logger.info("Redis job accepted", {
       jobId: job.id,
