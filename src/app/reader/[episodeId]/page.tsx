@@ -4,16 +4,19 @@ import { getReaderPayload } from "@/modules/reader/application/get-reader-payloa
 import { ProgressTracker } from "@/components/progress-tracker";
 import { TranslationToggle } from "@/components/translation-toggle";
 import { ReaderSettings } from "@/components/reader-settings";
+import { ComparePane } from "@/components/reader/compare-pane";
 import { getLocale, t } from "@/lib/i18n";
 
 interface Props {
   params: Promise<{ episodeId: string }>;
+  searchParams: Promise<{ compare?: string }>;
 }
 
-export default async function ReaderPage({ params }: Props) {
+export default async function ReaderPage({ params, searchParams }: Props) {
   const locale = await getLocale();
   const { episodeId } = await params;
-  const payload = await getReaderPayload(episodeId);
+  const { compare: compareModel } = await searchParams;
+  const payload = await getReaderPayload(episodeId, compareModel);
 
   if (!payload) {
     notFound();
@@ -112,6 +115,20 @@ export default async function ReaderPage({ params }: Props) {
 
       {/* Reading area */}
       <main className="reader-area mx-auto w-full flex-1 px-6 py-10">
+        {payload.compareTranslation && translation && (
+          <div className="mb-8">
+            <ComparePane
+              episodeId={episodeId}
+              sourceParagraphs={paragraphs}
+              primary={{
+                modelName: translation.modelName,
+                translatedText: translation.translatedText,
+              }}
+              compare={payload.compareTranslation}
+            />
+          </div>
+        )}
+
         {/* Episode title */}
         {episode.titleJa && (
           <div className="mb-10 text-center">

@@ -492,6 +492,15 @@ export function TranslationToggle({
                           {isActive && <span className="text-accent">&#10003;</span>}
                         </span>
                       </button>
+                      {!isActive && (
+                        <Link
+                          href={`?compare=${encodeURIComponent(tr.modelName)}`}
+                          className="rounded-md px-2 py-2 text-xs text-muted transition-colors hover:bg-surface-strong hover:text-foreground"
+                          title="Compare with active translation"
+                        >
+                          vs
+                        </Link>
+                      )}
                       <button
                         type="button"
                         onClick={() => discardTranslation(tr.id)}

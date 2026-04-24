@@ -39,6 +39,14 @@ export const readerPayloadSchema = z.object({
       estimatedCostUsd: z.number().nullable(),
     }),
   ),
+  compareTranslation: z
+    .object({
+      modelName: z.string(),
+      translatedText: z.string().nullable(),
+      translatedPreface: z.string().nullable(),
+      translatedAfterword: z.string().nullable(),
+    })
+    .nullable(),
   pendingTranslation: pendingTranslationSchema.nullable(),
   configuredModel: z.string(),
   navigation: z.object({

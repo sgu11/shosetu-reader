@@ -9,6 +9,7 @@ import type { ReaderPayload } from "../api/schemas";
 
 export async function getReaderPayload(
   episodeId: string,
+  compareModelName?: string,
 ): Promise<ReaderPayload | null> {
   const db = getDb();
 
@@ -159,6 +160,22 @@ export async function getReaderPayload(
         completedAt: t.completedAt?.toISOString() ?? null,
         estimatedCostUsd: t.estimatedCostUsd,
       })),
+    compareTranslation: (() => {
+      if (!compareModelName) return null;
+      const match = allTranslations.find(
+        (t) =>
+          t.status === "available" &&
+          t.modelName === compareModelName &&
+          t.id !== translation?.id,
+      );
+      if (!match) return null;
+      return {
+        modelName: match.modelName,
+        translatedText: match.translatedText,
+        translatedPreface: match.translatedPreface ?? null,
+        translatedAfterword: match.translatedAfterword ?? null,
+      };
+    })(),
     pendingTranslation: pendingTranslation
       ? {
           status: pendingTranslation.status as "queued" | "processing",
