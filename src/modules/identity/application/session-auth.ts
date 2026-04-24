@@ -76,42 +76,45 @@ export async function signInWithEmail(input: {
   const normalizedEmail = normalizeEmail(input.email);
   const displayName = input.displayName?.trim() || fallbackDisplayName(normalizedEmail);
 
-  const [existing] = await db
-    .select({
+  const inserted = await db
+    .insert(users)
+    .values({
+      email: normalizedEmail,
+      displayName,
+    })
+    .onConflictDoNothing({ target: users.email })
+    .returning({
       id: users.id,
       email: users.email,
       displayName: users.displayName,
-    })
-    .from(users)
-    .where(eq(users.email, normalizedEmail))
-    .limit(1);
+    });
 
-  const createdNewUser = !existing;
-  const user = existing
-    ? existing
-    : (
-        await db
-          .insert(users)
-          .values({
-            email: normalizedEmail,
-            displayName,
-          })
-          .returning({
-            id: users.id,
-            email: users.email,
-            displayName: users.displayName,
-          })
-      )[0];
-
-  if (existing && !existing.displayName && displayName) {
-    await db
-      .update(users)
-      .set({
-        displayName,
-        updatedAt: new Date(),
+  let user: { id: string; email: string; displayName: string | null };
+  const createdNewUser = inserted.length > 0;
+  if (createdNewUser) {
+    user = inserted[0];
+  } else {
+    const [existing] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        displayName: users.displayName,
       })
-      .where(eq(users.id, existing.id));
-    user.displayName = displayName;
+      .from(users)
+      .where(eq(users.email, normalizedEmail))
+      .limit(1);
+    if (!existing) {
+      throw new Error("Unexpected: upsert conflict but no row found");
+    }
+    user = existing;
+
+    if (!existing.displayName && displayName) {
+      await db
+        .update(users)
+        .set({ displayName, updatedAt: new Date() })
+        .where(eq(users.id, existing.id));
+      user.displayName = displayName;
+    }
   }
 
   await migrateGuestStateToProfile(user.id, createdNewUser);
