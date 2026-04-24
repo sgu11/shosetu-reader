@@ -1,6 +1,6 @@
 # V5 — New Capabilities
 
-Last updated: 2026-04-14
+Last updated: 2026-04-24
 
 ## Guiding Principle
 
@@ -172,6 +172,52 @@ transfer translations to an e-reader or read offline in a dedicated reading app.
 **Scope:** EPUB generation library (e.g., `epub-gen` or manual ZIP+XHTML assembly),
 new API endpoint, download UI on novel detail page.
 
+### V5.9 — Favorite Models for Quick Selection
+
+**Problem:** The model dropdown in settings and the glossary/reader surfaces
+enumerates the full OpenRouter catalog (filtered to 30 rows in
+`novel-glossary-editor.tsx:864`). Users who frequently switch between a small set
+of models (e.g., `deepseek/deepseek-v4-flash`, `anthropic/claude-haiku`) must
+scroll or re-type every time. No way to pin preferred models.
+
+**Plan:**
+- New `favorite_models` column (text array) on `user_settings` (or equivalent
+  per-user settings row)
+- New endpoints: `POST /api/settings/favorite-models` (add), `DELETE` (remove)
+- UI: star/unstar toggle on each model row in the model picker
+- Favorites rendered as a pinned section at the top of every model dropdown
+  (settings page, novel-level model override, glossary generator, translation
+  comparison picker in V5.6)
+- Auto-seed favorites from the 3 most-recently-used models on first load if
+  the user has no favorites
+- Keep the full catalog searchable below the favorites section
+
+**Scope:** Schema migration, CRUD endpoints, shared `<ModelPicker>` component
+refactor, settings UI, seed logic based on translation history.
+
+### V5.10 — Increase Glossary Prompt Limit to 200
+
+**Problem:** `render-glossary-prompt.ts` caps the glossary injected into
+translation prompts at `MAX_PROMPT_ENTRIES = 50`. Mid-to-long novels routinely
+accumulate 100+ confirmed entries; anything beyond 50 is silently dropped
+(shown as `(+N entries omitted)`). Cheap, high-context models (Gemini 2.5,
+DeepSeek V4) can handle far more without hitting context limits, so the cap
+is leaving translation quality on the table.
+
+**Plan:**
+- Raise `MAX_PROMPT_ENTRIES` from 50 → 200 in `render-glossary-prompt.ts:1`
+- Audit prompt size impact: 200 entries × avg ~60 chars/row ≈ 12K extra chars
+  (~3K tokens). Verify this stays within per-model context budget across all
+  configured workloads (translation, summary, extraction, title)
+- If context is tight for lower-tier models, make the cap configurable per
+  workload via `OPENROUTER_*_GLOSSARY_CAP` env vars (fall back to 200)
+- Update `quality-validation.ts` compliance check to reflect new cap (if it
+  assumes all confirmed entries are injected)
+- Bump any test fixtures that assume the 50-entry ceiling
+
+**Scope:** One-line constant bump + context-budget verification + per-workload
+override if needed. Smallest V5 item, highest translation-quality-per-loc ratio.
+
 ---
 
 ## Recommended Phasing
@@ -217,6 +263,16 @@ change in V5. Comparison mode is independent but pairs well since SSE can push
 Heaviest frontend work. PWA requires thorough testing across browsers and devices.
 EPUB is self-contained but benefits from a stable translation quality baseline.
 
+### Phase E — Quality of Life
+
+| Item | Dependencies |
+|------|-------------|
+| V5.9 Favorite Models | None — pairs well with V5.6 comparison picker |
+| V5.10 Glossary Limit 200 | None — single constant bump |
+
+Low-risk, high-frequency UX wins. Can ship at any time, independent of other
+phases. V5.10 should ship first (trivial), V5.9 alongside or after V5.6.
+
 ---
 
 ## Non-Goals for V5
@@ -237,3 +293,5 @@ EPUB is self-contained but benefits from a stable translation quality baseline.
 - Two translations can be compared side-by-side in the reader
 - Read episodes are available offline via service worker
 - Translated novels can be exported as EPUB
+- Favorite models appear pinned at top of every model picker
+- Glossary prompt cap raised to 200 entries with context-budget guardrails
