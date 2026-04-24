@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { and, eq, sql } from "drizzle-orm";
 import { acquireRequestDeduplicationLock } from "@/lib/request-dedupe";
+import { getDb } from "@/lib/db/client";
+import { episodes } from "@/lib/db/schema";
 import { getNovelById } from "@/modules/catalog/application/get-novel";
-import { resetFetchedEpisodes } from "@/modules/catalog/application/ingest-episodes";
 import { getJobQueue } from "@/modules/jobs/application/job-queue";
 import type { IngestAllJobPayload } from "@/modules/jobs/application/job-handlers";
 import { getActiveJobByKindAndEntity } from "@/modules/jobs/application/job-runs";
@@ -14,8 +16,11 @@ const RATE_LIMIT = { limit: 1, windowSeconds: 120 };
 /**
  * POST /api/novels/:novelId/reingest-all
  *
- * Resets all fetched episodes back to "pending" and re-fetches them
- * in the background. Useful after scraper improvements (e.g. preface/afterword).
+ * V5.3: Iterates all fetched episodes and reconciles each against its
+ * source checksum. Only episodes whose source HTML has actually changed
+ * incur a DB write (and implicit translation drift). Unchanged episodes
+ * bump lastFetchedAt only. Useful after scraper improvements and for
+ * periodic "catch up to source edits" runs without burning DB churn.
  */
 export async function POST(
   request: NextRequest,
@@ -60,13 +65,18 @@ export async function POST(
     return NextResponse.json({ error: "Re-ingest was requested recently" }, { status: 409 });
   }
 
-  const resetCount = await resetFetchedEpisodes(novelId);
+  const db = getDb();
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(episodes)
+    .where(and(eq(episodes.novelId, novelId), eq(episodes.fetchStatus, "fetched")));
 
-  if (resetCount === 0) {
+  const fetchedCount = Number(count);
+  if (fetchedCount === 0) {
     return NextResponse.json({
       novelId,
       reset: 0,
-      message: "No episodes to re-ingest",
+      message: "No fetched episodes to reconcile",
     });
   }
 
@@ -76,6 +86,7 @@ export async function POST(
     limit: 9999,
     discovered: 0,
     ownerUserId: "site",
+    reconcile: true,
   };
 
   const job = await jobQueue.enqueue(
@@ -87,10 +98,10 @@ export async function POST(
   return NextResponse.json(
     {
       novelId,
-      reset: resetCount,
+      reset: fetchedCount,
       jobId: job.id,
       runner: job.runner,
-      message: `Reset ${resetCount} episodes — re-fetching in background`,
+      message: `Reconciling ${fetchedCount} episodes in background — unchanged sources will skip DB writes`,
     },
     { status: 202 },
   );

@@ -4,6 +4,7 @@ import { episodes } from "@/lib/db/schema";
 import { translateTexts } from "@/lib/translate-cache";
 import {
   fetchPendingEpisodes,
+  reingestNovelByChecksum,
 } from "@/modules/catalog/application/ingest-episodes";
 import { refreshSubscribedNovelMetadata } from "@/modules/catalog/application/refresh-metadata";
 import { extractGlossaryTerms, type ExtractGlossaryPayload } from "@/modules/translation/application/extract-glossary";
@@ -19,6 +20,12 @@ export interface IngestAllJobPayload {
   limit: number;
   discovered: number;
   ownerUserId: string;
+  /**
+   * When true, iterate all fetched episodes and reconcile against their
+   * stored checksum. Unchanged episodes skip DB writes. Used by V5.3
+   * selective re-ingest.
+   */
+  reconcile?: boolean;
 }
 
 export interface BulkTranslateAllJobPayload {
@@ -63,7 +70,7 @@ async function handleIngestAll(
   context: JobExecutionContext<IngestAllJobPayload>,
 ) {
   await context.updateProgress({
-    stage: "fetching",
+    stage: payload.reconcile ? "reconciling" : "fetching",
     discovered: payload.discovered,
     processed: 0,
     total: 0,
@@ -71,17 +78,32 @@ async function handleIngestAll(
     failed: 0,
   });
 
-  const result = await fetchPendingEpisodes(
-    payload.novelId,
-    payload.limit,
-    async (progress) => {
+  let result:
+    | { fetched: number; failed: number; total: number }
+    | { unchanged: number; updated: number; failed: number; total: number };
+
+  if (payload.reconcile) {
+    const r = await reingestNovelByChecksum(payload.novelId, async (progress) => {
       await context.updateProgress({
-        stage: "fetching",
+        stage: "reconciling",
         discovered: payload.discovered,
         ...progress,
       });
-    },
-  );
+    });
+    result = r;
+  } else {
+    result = await fetchPendingEpisodes(
+      payload.novelId,
+      payload.limit,
+      async (progress) => {
+        await context.updateProgress({
+          stage: "fetching",
+          discovered: payload.discovered,
+          ...progress,
+        });
+      },
+    );
+  }
 
   // Batch-translate episode titles so first novel page load is instant
   try {

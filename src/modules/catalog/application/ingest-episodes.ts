@@ -135,6 +135,138 @@ export async function fetchAndPersistEpisode(episodeId: string): Promise<void> {
 }
 
 /**
+ * Fetch content and reconcile against the stored checksum. If unchanged,
+ * only lastFetchedAt is bumped; otherwise the episode row is rewritten.
+ * Caller may observe translation drift for "updated" episodes — translations
+ * still point to the old source text until re-requested.
+ */
+export interface ReconcileResult {
+  status: "unchanged" | "updated" | "failed";
+  previousChecksum: string | null;
+  newChecksum: string | null;
+}
+
+export async function fetchAndReconcileEpisode(
+  episodeId: string,
+): Promise<ReconcileResult> {
+  const db = getDb();
+
+  const [episode] = await db
+    .select()
+    .from(episodes)
+    .where(eq(episodes.id, episodeId))
+    .limit(1);
+  if (!episode) throw new Error(`Episode not found: ${episodeId}`);
+
+  const [novel] = await db
+    .select()
+    .from(novels)
+    .where(eq(novels.id, episode.novelId))
+    .limit(1);
+  if (!novel) throw new Error(`Novel not found for episode: ${episodeId}`);
+
+  try {
+    const content = await fetchEpisodeContent(
+      novel.sourceNcode,
+      episode.episodeNumber,
+    );
+
+    const now = new Date();
+    if (content.checksum === episode.rawHtmlChecksum) {
+      await db
+        .update(episodes)
+        .set({ lastFetchedAt: now, updatedAt: now })
+        .where(eq(episodes.id, episodeId));
+      return {
+        status: "unchanged",
+        previousChecksum: episode.rawHtmlChecksum,
+        newChecksum: content.checksum,
+      };
+    }
+
+    await db
+      .update(episodes)
+      .set({
+        titleJa: content.title || episode.titleJa,
+        rawHtmlChecksum: content.checksum,
+        rawTextJa: content.normalizedText,
+        normalizedTextJa: content.normalizedText,
+        prefaceJa: content.prefaceText,
+        afterwordJa: content.afterwordText,
+        fetchStatus: "fetched",
+        lastFetchedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(episodes.id, episodeId));
+
+    return {
+      status: "updated",
+      previousChecksum: episode.rawHtmlChecksum,
+      newChecksum: content.checksum,
+    };
+  } catch {
+    return {
+      status: "failed",
+      previousChecksum: episode.rawHtmlChecksum,
+      newChecksum: null,
+    };
+  }
+}
+
+/**
+ * Iterate every fetched episode of a novel, comparing each source checksum
+ * against its stored value. Skips DB writes for unchanged episodes.
+ */
+export async function reingestNovelByChecksum(
+  novelId: string,
+  onProgress?: (progress: {
+    processed: number;
+    total: number;
+    unchanged: number;
+    updated: number;
+    failed: number;
+    currentEpisodeId: string;
+  }) => Promise<void> | void,
+): Promise<{ unchanged: number; updated: number; failed: number; total: number }> {
+  const db = getDb();
+
+  const rows = await db
+    .select({ id: episodes.id })
+    .from(episodes)
+    .where(
+      and(eq(episodes.novelId, novelId), eq(episodes.fetchStatus, "fetched")),
+    )
+    .orderBy(episodes.episodeNumber);
+
+  let unchanged = 0;
+  let updated = 0;
+  let failed = 0;
+  const total = rows.length;
+
+  for (const [index, ep] of rows.entries()) {
+    const result = await fetchAndReconcileEpisode(ep.id);
+    if (result.status === "unchanged") unchanged += 1;
+    else if (result.status === "updated") updated += 1;
+    else failed += 1;
+
+    await onProgress?.({
+      processed: index + 1,
+      total,
+      unchanged,
+      updated,
+      failed,
+      currentEpisodeId: ep.id,
+    });
+
+    if (index < rows.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, FETCH_DELAY_MS));
+    }
+  }
+
+  return { unchanged, updated, failed, total };
+}
+
+/**
  * Fetch content for the first N pending episodes of a novel.
  * Respects rate limiting with delays between requests.
  */
