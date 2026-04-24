@@ -3,6 +3,7 @@ import { registerNovelInputSchema } from "@/modules/source/api/schemas";
 import { registerNovel } from "@/modules/catalog/application/register-novel";
 import { SyosetuApiError } from "@/modules/source/infra/syosetu-api";
 import { rateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 
 // 5 novel registrations per minute per IP
 const RATE_LIMIT = { limit: 5, windowSeconds: 60 };
@@ -36,7 +37,10 @@ export async function POST(request: NextRequest) {
       const status = err.statusCode === 404 ? 404 : 502;
       return NextResponse.json({ error: err.message }, { status });
     }
-    console.error("Registration failed:", err);
+    logger.error("Registration failed", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "POST /api/novels/register",
+    });
     return NextResponse.json(
       { error: "Internal server error during registration" },
       { status: 500 },

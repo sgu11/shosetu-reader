@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { updateProgressInputSchema } from "@/modules/library/api/schemas";
+import { logger } from "@/lib/logger";
 import { updateReadingProgress } from "@/modules/library/application/update-progress";
 
 export async function PUT(req: Request) {
@@ -17,7 +18,10 @@ export async function PUT(req: Request) {
     await updateReadingProgress(parsed.data);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Failed to update progress:", err);
+    logger.error("Failed to update progress", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "PUT /api/progress",
+    });
     return NextResponse.json({ error: "Failed to update progress" }, { status: 400 });
   }
 }

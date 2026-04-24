@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRanking } from "@/modules/catalog/application/get-ranking";
 import type { RankingPeriod } from "@/modules/source/infra/syosetu-api";
 import { rateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 
 const VALID_PERIODS = new Set(["daily", "weekly", "monthly", "quarterly"]);
 
@@ -33,7 +34,10 @@ export async function GET(req: NextRequest) {
       },
     );
   } catch (err) {
-    console.error("Failed to fetch ranking:", err);
+    logger.error("Failed to fetch ranking", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "GET /api/ranking",
+    });
     return NextResponse.json({ error: "Failed to fetch ranking" }, { status: 500 });
   }
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getTranslationStatus } from "@/modules/translation/application/get-translation-status";
+import { logger } from "@/lib/logger";
 import { isValidUuid } from "@/lib/validation";
 
 interface Ctx {
@@ -15,7 +16,10 @@ export async function GET(_req: Request, ctx: Ctx) {
     const status = await getTranslationStatus(episodeId);
     return NextResponse.json(status);
   } catch (err) {
-    console.error("Failed to get translation status:", err);
+    logger.error("Failed to get translation status", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "GET /api/translations/episodes/:episodeId/status",
+    });
     return NextResponse.json({ error: "Failed to get translation status" }, { status: 500 });
   }
 }

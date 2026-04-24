@@ -3,6 +3,7 @@ import { desc, isNotNull } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { translations } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth/admin-guard";
+import { logger } from "@/lib/logger";
 
 /**
  * GET /api/admin/translations/quality
@@ -43,7 +44,10 @@ export async function GET(req: NextRequest) {
       count: rows.length,
     });
   } catch (err) {
-    console.error("Failed to fetch quality warnings:", err);
+    logger.error("Failed to fetch quality warnings", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "GET /api/admin/translations/quality",
+    });
     return NextResponse.json(
       { error: "Failed to fetch quality warnings" },
       { status: 500 },

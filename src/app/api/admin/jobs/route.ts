@@ -3,6 +3,7 @@ import { eq, desc } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { jobRuns } from "@/lib/db/schema";
 import { requireAdmin } from "@/lib/auth/admin-guard";
+import { logger } from "@/lib/logger";
 
 export async function GET(req: NextRequest) {
   const denied = requireAdmin(req);
@@ -43,7 +44,10 @@ export async function GET(req: NextRequest) {
       count: rows.length,
     });
   } catch (err) {
-    console.error("Failed to fetch jobs:", err);
+    logger.error("Failed to fetch jobs", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "GET /api/admin/jobs",
+    });
     return NextResponse.json({ error: "Failed to fetch jobs" }, { status: 500 });
   }
 }

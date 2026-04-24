@@ -4,6 +4,7 @@ import {
   getReadingStats,
   type Range,
 } from "@/modules/library/application/get-reading-stats";
+import { logger } from "@/lib/logger";
 
 const ALLOWED_RANGE: Range[] = ["30d", "90d", "all"];
 
@@ -18,7 +19,10 @@ export async function GET(req: NextRequest) {
     const stats = await getReadingStats(userId, range);
     return NextResponse.json(stats);
   } catch (err) {
-    console.error("stats failed:", err);
+    logger.error("stats failed", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "GET /api/stats",
+    });
     return NextResponse.json({ error: "Failed to load stats" }, { status: 500 });
   }
 }

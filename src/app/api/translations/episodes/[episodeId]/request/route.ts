@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requestTranslation } from "@/modules/translation/application/request-translation";
 import { rateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import { isValidUuid } from "@/lib/validation";
 
 interface Ctx {
@@ -32,7 +33,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const result = await requestTranslation(episodeId, modelOverride);
     return NextResponse.json(result, { status: 202 });
   } catch (err) {
-    console.error("Translation request failed:", err);
+    logger.error("Translation request failed", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "POST /api/translations/episodes/:episodeId/request",
+    });
     return NextResponse.json({ error: "Translation request failed" }, { status: 400 });
   }
 }

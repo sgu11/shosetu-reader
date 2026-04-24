@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import { translateTexts } from "@/lib/translate-cache";
 
 const RATE_LIMIT_CONFIG = { limit: 10, windowSeconds: 60 };
@@ -26,7 +27,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ translations: result });
   } catch (err) {
-    console.error("Title translation error:", err);
+    logger.error("Title translation error", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "POST /api/ranking/translate-titles",
+    });
     return NextResponse.json({ error: "Translation failed" }, { status: 500 });
   }
 }

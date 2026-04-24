@@ -5,6 +5,7 @@ import {
   fetchPendingEpisodes,
 } from "@/modules/catalog/application/ingest-episodes";
 import { rateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import { isValidUuid } from "@/lib/validation";
 
 // 3 ingestion requests per minute per IP
@@ -48,7 +49,10 @@ export async function POST(
       failed,
     });
   } catch (err) {
-    console.error("Episode ingestion failed:", err);
+    logger.error("Episode ingestion failed", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "POST /api/novels/:novelId/ingest",
+    });
     return NextResponse.json(
       { error: "Episode ingestion failed" },
       { status: 500 },

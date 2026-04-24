@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listGlossaryEntries, createGlossaryEntry } from "@/modules/translation/application/glossary-entries";
+import { logger } from "@/lib/logger";
 import { isValidUuid } from "@/lib/validation";
 
 interface RouteContext {
@@ -16,7 +17,10 @@ export async function GET(req: NextRequest, context: RouteContext) {
     const entries = await listGlossaryEntries(novelId, status);
     return NextResponse.json({ entries });
   } catch (err) {
-    console.error("Failed to list glossary entries:", err);
+    logger.error("Failed to list glossary entries", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "GET /api/novels/:novelId/glossary/entries",
+    });
     return NextResponse.json({ error: "Failed to list glossary entries" }, { status: 500 });
   }
 }
@@ -49,7 +53,10 @@ export async function POST(req: NextRequest, context: RouteContext) {
     }
     return NextResponse.json({ entry }, { status: 201 });
   } catch (err) {
-    console.error("Failed to create glossary entry:", err);
+    logger.error("Failed to create glossary entry", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "POST /api/novels/:novelId/glossary/entries",
+    });
     return NextResponse.json({ error: "Failed to create glossary entry" }, { status: 500 });
   }
 }

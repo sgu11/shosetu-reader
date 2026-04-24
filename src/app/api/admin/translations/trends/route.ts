@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { requireAdmin } from "@/lib/auth/admin-guard";
+import { logger } from "@/lib/logger";
 
 export async function GET(req: NextRequest) {
   const denied = requireAdmin(req);
@@ -70,7 +71,10 @@ export async function GET(req: NextRequest) {
       recentFailures: [...failureStats],
     });
   } catch (err) {
-    console.error("Failed to fetch translation trends:", err);
+    logger.error("Failed to fetch translation trends", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "GET /api/admin/translations/trends",
+    });
     return NextResponse.json({ error: "Failed to fetch trends" }, { status: 500 });
   }
 }

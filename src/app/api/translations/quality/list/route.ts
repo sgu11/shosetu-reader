@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import { listWarnings, type Severity } from "@/modules/translation/application/quality-warnings-aggregation";
 
 const ALLOWED_SEVERITY: Severity[] = ["info", "warning", "error"];
@@ -21,7 +22,10 @@ export async function GET(req: NextRequest) {
     const result = await listWarnings({ novelId, code, severity, limit, offset });
     return NextResponse.json(result);
   } catch (err) {
-    console.error("quality list failed:", err);
+    logger.error("quality list failed", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "GET /api/translations/quality/list",
+    });
     return NextResponse.json({ error: "Failed to list warnings" }, { status: 500 });
   }
 }

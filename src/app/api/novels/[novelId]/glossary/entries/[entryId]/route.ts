@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updateGlossaryEntry, deleteGlossaryEntry } from "@/modules/translation/application/glossary-entries";
+import { logger } from "@/lib/logger";
 import { isValidUuid } from "@/lib/validation";
 
 interface RouteContext {
@@ -19,7 +20,10 @@ export async function PUT(req: NextRequest, context: RouteContext) {
     }
     return NextResponse.json({ entry });
   } catch (err) {
-    console.error("Failed to update glossary entry:", err);
+    logger.error("Failed to update glossary entry", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "PUT /api/novels/:novelId/glossary/entries/:entryId",
+    });
     return NextResponse.json({ error: "Failed to update glossary entry" }, { status: 500 });
   }
 }
@@ -36,7 +40,10 @@ export async function DELETE(_req: NextRequest, context: RouteContext) {
     }
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Failed to delete glossary entry:", err);
+    logger.error("Failed to delete glossary entry", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "DELETE /api/novels/:novelId/glossary/entries/:entryId",
+    });
     return NextResponse.json({ error: "Failed to delete glossary entry" }, { status: 500 });
   }
 }

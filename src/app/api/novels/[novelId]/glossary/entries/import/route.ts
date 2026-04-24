@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { importGlossaryEntries } from "@/modules/translation/application/glossary-entries";
+import { logger } from "@/lib/logger";
 import { isValidUuid } from "@/lib/validation";
 
 interface RouteContext {
@@ -22,7 +23,10 @@ export async function POST(req: NextRequest, context: RouteContext) {
     const result = await importGlossaryEntries(novelId, body.entries);
     return NextResponse.json(result);
   } catch (err) {
-    console.error("Failed to import glossary entries:", err);
+    logger.error("Failed to import glossary entries", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "POST /api/novels/:novelId/glossary/entries/import",
+    });
     return NextResponse.json({ error: "Failed to import glossary entries" }, { status: 500 });
   }
 }

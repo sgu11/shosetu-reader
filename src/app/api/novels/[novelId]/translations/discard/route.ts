@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
 import { isValidUuid } from "@/lib/validation";
 import { discardNovelTranslationsInputSchema } from "@/modules/translation/api/schemas";
 import { discardNovelTranslations } from "@/modules/translation/application/discard-translations";
@@ -36,7 +37,10 @@ export async function DELETE(req: NextRequest, ctx: Ctx) {
 
     return NextResponse.json(result);
   } catch (err) {
-    console.error("Failed to discard novel translations:", err);
+    logger.error("Failed to discard novel translations", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "DELETE /api/novels/:novelId/translations/discard",
+    });
     return NextResponse.json({ error: "Failed to discard translations" }, { status: 500 });
   }
 }

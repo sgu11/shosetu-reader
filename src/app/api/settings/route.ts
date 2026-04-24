@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { rateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
 
 // 30 settings reads per minute, 10 writes per minute
@@ -32,7 +33,10 @@ export async function GET(req: NextRequest) {
       theme: user?.theme ?? "system",
     });
   } catch (err) {
-    console.error("Failed to fetch settings:", err);
+    logger.error("Failed to fetch settings", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "GET /api/settings",
+    });
     return NextResponse.json({ error: "Failed to fetch settings" }, { status: 500 });
   }
 }
@@ -63,7 +67,10 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Failed to update settings:", err);
+    logger.error("Failed to update settings", {
+      err: err instanceof Error ? err.message : String(err),
+      route: "PUT /api/settings",
+    });
     return NextResponse.json({ error: "Failed to update settings" }, { status: 500 });
   }
 }
