@@ -7,6 +7,7 @@ import { recordOpenRouterUsage } from "@/lib/ops-metrics";
 import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
 import { getJobQueue } from "@/modules/jobs/application/job-queue";
 import { OpenRouterProvider } from "../infra/openrouter-provider";
+import type { TranslationProvider, TranslationRequest, TranslationResult } from "../domain/provider";
 import { estimateCost } from "./cost-estimation";
 import { splitIntoChunks, reassembleChunks } from "./chunk-episode";
 import { computePromptFingerprint } from "./prompt-fingerprint";
@@ -257,6 +258,100 @@ async function enqueueTranslationJob(payload: TranslationJobPayload) {
   });
 }
 
+const MAX_SPLIT_DEPTH = 3;
+
+/**
+ * Split source text at the midpoint paragraph boundary. Falls back to
+ * character midpoint if the block is a single blob with no newlines.
+ */
+function splitSourceInHalf(text: string): [string, string] | null {
+  if (text.length < 200) return null;
+  const paragraphs = text.split(/\n\n+/).filter((p) => p.length > 0);
+  if (paragraphs.length >= 2) {
+    const totalLen = text.length;
+    let running = 0;
+    for (let i = 1; i < paragraphs.length; i += 1) {
+      running += paragraphs[i - 1].length + 2;
+      if (running >= totalLen / 2) {
+        return [
+          paragraphs.slice(0, i).join("\n\n"),
+          paragraphs.slice(i).join("\n\n"),
+        ];
+      }
+    }
+  }
+  const lines = text.split(/\n/);
+  if (lines.length >= 2) {
+    const mid = Math.ceil(lines.length / 2);
+    return [lines.slice(0, mid).join("\n"), lines.slice(mid).join("\n")];
+  }
+  const mid = Math.ceil(text.length / 2);
+  return [text.slice(0, mid), text.slice(mid)];
+}
+
+/**
+ * Call provider.translate; if the result comes back truncated even after
+ * the provider's internal max_tokens retries, split the source in half
+ * and translate each half separately. Recurses up to MAX_SPLIT_DEPTH.
+ * Merged output concatenates halves with a paragraph break.
+ */
+async function translateWithTruncationRecovery(
+  provider: TranslationProvider,
+  request: TranslationRequest,
+  contextSummary: string | undefined,
+  depth = 0,
+): Promise<TranslationResult> {
+  const result = await provider.translate(request, contextSummary);
+  if (result.finishReason !== "length" || depth >= MAX_SPLIT_DEPTH) {
+    return result;
+  }
+
+  const halves = splitSourceInHalf(request.sourceText);
+  if (!halves) return result;
+
+  logger.warn("Splitting source on finish_reason=length", {
+    model: provider.modelName,
+    sourceChars: request.sourceText.length,
+    depth,
+    chunkLabel: request.chunkLabel,
+  });
+
+  const [firstHalf, secondHalf] = halves;
+  const firstResult = await translateWithTruncationRecovery(
+    provider,
+    { ...request, sourceText: firstHalf },
+    contextSummary,
+    depth + 1,
+  );
+  const secondResult = await translateWithTruncationRecovery(
+    provider,
+    {
+      ...request,
+      sourceText: secondHalf,
+      previousChunkTranslation: firstResult.translatedText.slice(-500),
+    },
+    contextSummary,
+    depth + 1,
+  );
+
+  const truncated =
+    firstResult.finishReason === "length" ||
+    secondResult.finishReason === "length";
+
+  return {
+    translatedText: [firstResult.translatedText, secondResult.translatedText]
+      .filter((t) => t.trim().length > 0)
+      .join("\n\n"),
+    provider: result.provider,
+    modelName: result.modelName,
+    inputTokens:
+      (firstResult.inputTokens ?? 0) + (secondResult.inputTokens ?? 0) || undefined,
+    outputTokens:
+      (firstResult.outputTokens ?? 0) + (secondResult.outputTokens ?? 0) || undefined,
+    finishReason: truncated ? "length" : firstResult.finishReason ?? "stop",
+  };
+}
+
 export async function processQueuedTranslation(
   payload: TranslationJobPayload,
 ): Promise<void> {
@@ -310,11 +405,15 @@ export async function processQueuedTranslation(
 
     if (!isChunked) {
       // Single-pass translation (original path)
-      const result = await provider.translate({
-        sourceText: payload.sourceText,
-        sourceLanguage: "ja",
-        targetLanguage: "ko",
-      }, payload.contextSummary);
+      const result = await translateWithTruncationRecovery(
+        provider,
+        {
+          sourceText: payload.sourceText,
+          sourceLanguage: "ja",
+          targetLanguage: "ko",
+        },
+        payload.contextSummary,
+      );
 
       finalTranslatedText = result.translatedText;
       if (result.finishReason === "length") hadTruncation = true;
@@ -330,13 +429,17 @@ export async function processQueuedTranslation(
       let previousTail: string | undefined;
 
       for (const chunk of chunks) {
-        const result = await provider.translate({
-          sourceText: chunk.text,
-          sourceLanguage: "ja",
-          targetLanguage: "ko",
-          previousChunkTranslation: previousTail,
-          chunkLabel: `${chunk.index + 1}/${chunk.total}`,
-        }, payload.contextSummary);
+        const result = await translateWithTruncationRecovery(
+          provider,
+          {
+            sourceText: chunk.text,
+            sourceLanguage: "ja",
+            targetLanguage: "ko",
+            previousChunkTranslation: previousTail,
+            chunkLabel: `${chunk.index + 1}/${chunk.total}`,
+          },
+          payload.contextSummary,
+        );
 
         translatedChunks.push(result.translatedText);
         if (result.finishReason === "length") hadTruncation = true;
@@ -360,13 +463,18 @@ export async function processQueuedTranslation(
     let translatedAfterword: string | null = null;
 
     if (payload.prefaceText?.trim()) {
-      const prefaceResult = await provider.translate({
-        sourceText: payload.prefaceText,
-        sourceLanguage: "ja",
-        targetLanguage: "ko",
-        isAuthorNote: true,
-      });
+      const prefaceResult = await translateWithTruncationRecovery(
+        provider,
+        {
+          sourceText: payload.prefaceText,
+          sourceLanguage: "ja",
+          targetLanguage: "ko",
+          isAuthorNote: true,
+        },
+        undefined,
+      );
       translatedPreface = prefaceResult.translatedText;
+      if (prefaceResult.finishReason === "length") hadTruncation = true;
       if (prefaceResult.inputTokens != null && prefaceResult.outputTokens != null) {
         totalInputTokens += prefaceResult.inputTokens;
         totalOutputTokens += prefaceResult.outputTokens;
@@ -374,13 +482,18 @@ export async function processQueuedTranslation(
     }
 
     if (payload.afterwordText?.trim()) {
-      const afterwordResult = await provider.translate({
-        sourceText: payload.afterwordText,
-        sourceLanguage: "ja",
-        targetLanguage: "ko",
-        isAuthorNote: true,
-      });
+      const afterwordResult = await translateWithTruncationRecovery(
+        provider,
+        {
+          sourceText: payload.afterwordText,
+          sourceLanguage: "ja",
+          targetLanguage: "ko",
+          isAuthorNote: true,
+        },
+        undefined,
+      );
       translatedAfterword = afterwordResult.translatedText;
+      if (afterwordResult.finishReason === "length") hadTruncation = true;
       if (afterwordResult.inputTokens != null && afterwordResult.outputTokens != null) {
         totalInputTokens += afterwordResult.inputTokens;
         totalOutputTokens += afterwordResult.outputTokens;

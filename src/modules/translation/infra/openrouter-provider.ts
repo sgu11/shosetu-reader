@@ -100,15 +100,19 @@ export class OpenRouterProvider implements TranslationProvider {
       content: `${authorNotePrefix}Translate the following Japanese text to Korean${chunkNote}:\n\n${request.sourceText}`,
     });
 
-    // Adaptive max_tokens: ~1.5x expansion ratio, ~2 chars/token for Korean
+    // Adaptive max_tokens: ~1.5x expansion, ~1.2 chars/token for Korean.
+    // Older formula used 2 chars/token which understates on models like
+    // DeepSeek whose Korean tokenizer is denser — 6K-char chunks regularly
+    // blew past the returned max_tokens and triggered finish_reason=length.
     const sourceChars = request.sourceText.length;
     const adaptiveMaxTokens = Math.min(
-      Math.max(Math.ceil((sourceChars * 1.5) / 2) + 512, 2048),
-      32768,
+      Math.max(Math.ceil((sourceChars * 1.5) / 1.2) + 1024, 4096),
+      65536,
     );
 
     let currentMaxTokens = adaptiveMaxTokens;
-    let truncationRetried = false;
+    const MAX_TRUNCATION_RETRIES = 2;
+    let truncationRetries = 0;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -148,10 +152,12 @@ export class OpenRouterProvider implements TranslationProvider {
         throw new Error("No translation content in OpenRouter response");
       }
 
-      // Retry once with doubled max_tokens if output was truncated
-      if (finishReason === "length" && !truncationRetried) {
-        truncationRetried = true;
-        currentMaxTokens = Math.min(currentMaxTokens * 2, 65536);
+      // Retry with progressively higher max_tokens when output is truncated.
+      // Some models cap completions below our first estimate; doubling up to
+      // twice (4x original) covers the common case without runaway cost.
+      if (finishReason === "length" && truncationRetries < MAX_TRUNCATION_RETRIES) {
+        truncationRetries += 1;
+        currentMaxTokens = Math.min(currentMaxTokens * 2, 131072);
         continue;
       }
 
