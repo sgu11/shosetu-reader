@@ -54,6 +54,14 @@ export async function POST(
     return NextResponse.json({ queued: 0, message: "No untranslated episodes found" });
   }
 
+  const dedupe = await acquireRequestDeduplicationLock({
+    scope: `bulk-translate-all:${novelId}`,
+    ttlMs: 10_000,
+  });
+  if (!dedupe.acquired) {
+    return NextResponse.json({ error: "Bulk translation was requested recently" }, { status: 409 });
+  }
+
   // Prevent duplicate sessions — return existing active session if one exists
   const [existingSession] = await db
     .select({ id: translationSessions.id })
@@ -76,14 +84,6 @@ export async function POST(
       },
       { status: 200 },
     );
-  }
-
-  const dedupe = await acquireRequestDeduplicationLock({
-    scope: `bulk-translate-all:${novelId}`,
-    ttlMs: 10_000,
-  });
-  if (!dedupe.acquired) {
-    return NextResponse.json({ error: "Bulk translation was requested recently" }, { status: 409 });
   }
 
   const total = untranslated.length;
