@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { novels } from "@/lib/db/schema";
 import { buildNovelUrl } from "@/modules/source/domain/ncode";
+import { logger } from "@/lib/logger";
 import {
   fetchNovelMetadata,
   type SyosetuNovelMetadata,
@@ -63,7 +64,12 @@ async function upsertNovel(
       .returning();
 
     // Fire-and-forget: translate title/summary if not yet translated
-    translateNovelMetadata(updated.id).catch(() => {});
+    translateNovelMetadata(updated.id).catch((err) => {
+      logger.warn("Title translation enqueue failed (non-fatal)", {
+        novelId: updated.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     return {
       novel: {
@@ -97,7 +103,12 @@ async function upsertNovel(
     .returning();
 
   // Fire-and-forget: translate title/summary to Korean
-  translateNovelMetadata(inserted.id).catch(() => {});
+  translateNovelMetadata(inserted.id).catch((err) => {
+    logger.warn("Metadata translation enqueue failed (non-fatal)", {
+      novelId: inserted.id,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  });
 
   return {
     novel: {

@@ -1,4 +1,5 @@
 import { createRedisConnection, getRedisClient, isRedisConfigured } from "./client";
+import { logger } from "@/lib/logger";
 
 type Handler = (msg: string) => void;
 type SubClient = Awaited<ReturnType<typeof createRedisConnection>>;
@@ -29,8 +30,11 @@ export async function publishToChannel(
   try {
     const client = await getRedisClient();
     await client.publish(channel, JSON.stringify(payload));
-  } catch {
-    // fire-and-forget; subscribers that miss the event will reconcile via polling fallback
+  } catch (err) {
+    logger.warn("Redis publish failed (non-fatal)", {
+      channel,
+      err: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -55,8 +59,11 @@ export async function subscribeToChannel(
       for (const h of current) {
         try {
           h(message);
-        } catch {
-          // handler errors must not break dispatch for siblings
+        } catch (err) {
+          logger.warn("Redis subscribe callback error", {
+            channel,
+            err: err instanceof Error ? err.message : String(err),
+          });
         }
       }
     });

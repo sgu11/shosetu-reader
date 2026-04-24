@@ -1,3 +1,4 @@
+import { logger } from "@/lib/logger";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { episodes } from "@/lib/db/schema";
@@ -120,8 +121,12 @@ async function handleIngestAll(
     if (titles.length > 0) {
       await translateTexts(titles);
     }
-  } catch {
-    // Non-fatal — titles will be translated on demand
+  } catch (err) {
+    logger.warn("Job progress update failed", {
+      jobKind: "catalog.ingest-all",
+      novelId: payload.novelId,
+      err: err instanceof Error ? err.message : String(err),
+    });
   }
 
   return {

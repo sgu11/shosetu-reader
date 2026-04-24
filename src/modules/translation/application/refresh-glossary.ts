@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db/client";
 import { episodes } from "@/lib/db/schema/episodes";
 import { novels } from "@/lib/db/schema/novels";
 import { translations } from "@/lib/db/schema/translations";
+import { logger } from "@/lib/logger";
 import { extractGlossaryTerms } from "./extract-glossary";
 
 const MAX_SAMPLE_SIZE = 20;
@@ -103,15 +104,22 @@ export async function refreshGlossary(
       });
       added += result.imported;
       skipped += result.skipped;
-    } catch {
+    } catch (err) {
+      logger.warn("Glossary extraction skipped due to error", {
+        novelId: payload.novelId,
+        episodeId: row.episodeId,
+        err: err instanceof Error ? err.message : String(err),
+      });
       skipped += 1;
     }
   }
 
-  await db
-    .update(novels)
-    .set({ glossaryLastRefreshedAt: sql`now()`, updatedAt: new Date() })
-    .where(eq(novels.id, payload.novelId));
+  if (added > 0) {
+    await db
+      .update(novels)
+      .set({ glossaryLastRefreshedAt: sql`now()`, updatedAt: new Date() })
+      .where(eq(novels.id, payload.novelId));
+  }
 
   await onProgress?.({
     stage: "completed",
