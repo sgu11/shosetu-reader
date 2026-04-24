@@ -28,6 +28,16 @@ try {
     )
   `;
 
+  // Realign SERIAL sequence with max(id). Prior runs that inserted explicit ids
+  // (drizzle-orm/migrator) leave the sequence behind, causing PK collisions here.
+  await sql.unsafe(`
+    SELECT setval(
+      pg_get_serial_sequence('${MIGRATIONS_TABLE}', 'id'),
+      COALESCE((SELECT MAX(id) FROM ${MIGRATIONS_TABLE}), 0) + 1,
+      false
+    )
+  `);
+
   // Read journal
   const journal = JSON.parse(fs.readFileSync(JOURNAL_PATH, "utf-8"));
   const entries = journal.entries;

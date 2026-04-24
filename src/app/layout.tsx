@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Source_Code_Pro, Noto_Serif_JP } from "next/font/google";
 import { cookies } from "next/headers";
 import { Nav } from "@/components/nav";
@@ -24,6 +24,9 @@ export const metadata: Metadata = {
   title: "Shosetu Reader",
   description: "Calm web reader for Syosetu novels with resume and translation flows.",
   manifest: "/manifest.webmanifest",
+};
+
+export const viewport: Viewport = {
   themeColor: "#0a0a0a",
 };
 
