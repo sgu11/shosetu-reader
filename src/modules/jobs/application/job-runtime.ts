@@ -32,6 +32,18 @@ const runtimeConfig = {
   recoverEveryMs: 30_000,
 } as const;
 
+const MOVE_DELAYED_LUA = `
+  local ids = redis.call('ZRANGEBYSCORE', KEYS[1], 0, ARGV[1], 'LIMIT', 0, tonumber(ARGV[2]))
+  if #ids == 0 then return 0 end
+  for i, id in ipairs(ids) do
+    local removed = redis.call('ZREM', KEYS[1], id)
+    if removed == 1 then
+      redis.call('RPUSH', KEYS[2], id)
+    end
+  end
+  return #ids
+`;
+
 export async function publishJobToQueue(jobId: string) {
   const redis = await getRedisClient();
   await redis.rPush(queueKeys.pending, jobId);
@@ -179,17 +191,15 @@ async function processJob(jobId: string) {
 
 async function moveDelayedJobsToPending() {
   const redis = await getRedisClient();
-  const dueJobIds = await redis.zRangeByScore(
+  await redis.sendCommand([
+    "EVAL",
+    MOVE_DELAYED_LUA,
+    "2",
     queueKeys.delayed,
-    0,
-    Date.now(),
-    { LIMIT: { offset: 0, count: runtimeConfig.delayedPollLimit } },
-  );
-
-  for (const jobId of dueJobIds) {
-    await redis.zRem(queueKeys.delayed, jobId);
-    await redis.rPush(queueKeys.pending, jobId);
-  }
+    queueKeys.pending,
+    String(Date.now()),
+    String(runtimeConfig.delayedPollLimit),
+  ]);
 }
 
 async function reconcileQueuedJobs() {
