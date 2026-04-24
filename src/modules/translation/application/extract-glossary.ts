@@ -6,6 +6,11 @@ import { logger } from "@/lib/logger";
 import { recordOpenRouterError, recordOpenRouterUsage } from "@/lib/ops-metrics";
 import { estimateCost } from "./cost-estimation";
 import { importGlossaryEntries, type GlossaryEntryInput } from "./glossary-entries";
+import { validateTermsAgainstCorpus } from "./validate-terms";
+
+const EXTRACT_TRUNC_CHARS = 6000;
+const RECENT_CONTEXT_EPISODES = 10;
+const REJECTED_CONTEXT_LIMIT = 20;
 
 const EXTRACTION_SYSTEM_PROMPT = `You are a glossary extraction assistant for Japanese-to-Korean web novel translation.
 
@@ -59,43 +64,57 @@ export async function extractGlossaryTerms(
     return { imported: 0, skipped: 0 };
   }
 
-  // Load ALL existing entries (confirmed, suggested, rejected) to provide full context
-  const existingEntries = await db
+  // Dedup set: ALL existing termJa (whatever status)
+  const allExisting = await db
     .select({
       termJa: novelGlossaryEntries.termJa,
       status: novelGlossaryEntries.status,
+      sourceEpisodeNumber: novelGlossaryEntries.sourceEpisodeNumber,
     })
     .from(novelGlossaryEntries)
     .where(eq(novelGlossaryEntries.novelId, payload.novelId));
 
-  const existingTerms = new Set(existingEntries.map((e) => e.termJa));
+  const existingTerms = new Set(allExisting.map((e) => e.termJa));
 
-  // Build context listing for each status
-  const confirmedTerms = existingEntries.filter((e) => e.status === "confirmed");
-  const suggestedTerms = existingEntries.filter((e) => e.status === "suggested");
-  const rejectedTerms = existingEntries.filter((e) => e.status === "rejected");
+  // Recency-pruned context: only pass confirmed+suggested that appeared within
+  // RECENT_CONTEXT_EPISODES of this episode, plus a capped sample of rejected.
+  const recencyFloor = payload.episodeNumber - RECENT_CONTEXT_EPISODES;
+  const confirmedRecent = allExisting.filter(
+    (e) =>
+      e.status === "confirmed" &&
+      (e.sourceEpisodeNumber == null || e.sourceEpisodeNumber >= recencyFloor),
+  );
+  const suggestedRecent = allExisting.filter(
+    (e) =>
+      e.status === "suggested" &&
+      (e.sourceEpisodeNumber == null || e.sourceEpisodeNumber >= recencyFloor),
+  );
+  const rejectedAll = allExisting.filter((e) => e.status === "rejected");
+  const rejectedSample = rejectedAll.slice(-REJECTED_CONTEXT_LIMIT);
 
   const contextParts: string[] = [];
-  if (confirmedTerms.length > 0) {
+  if (confirmedRecent.length > 0) {
     contextParts.push(
-      `\n\nConfirmed glossary entries (confirmed — do not re-extract):\n${confirmedTerms.map((e) => e.termJa).join(", ")}`,
+      `\n\nConfirmed glossary entries (recent — do not re-extract):\n${confirmedRecent.map((e) => e.termJa).join(", ")}`,
     );
   }
-  if (suggestedTerms.length > 0) {
+  if (suggestedRecent.length > 0) {
     contextParts.push(
-      `\n\nSuggested entries (already suggested — skip):\n${suggestedTerms.map((e) => e.termJa).join(", ")}`,
+      `\n\nSuggested entries (recent — skip):\n${suggestedRecent.map((e) => e.termJa).join(", ")}`,
     );
   }
-  if (rejectedTerms.length > 0) {
+  if (rejectedSample.length > 0) {
+    const moreCount = rejectedAll.length - rejectedSample.length;
+    const moreSuffix = moreCount > 0 ? ` (+${moreCount} older rejected)` : "";
     contextParts.push(
-      `\n\nRejected entries (rejected — do NOT re-suggest):\n${rejectedTerms.map((e) => e.termJa).join(", ")}`,
+      `\n\nRejected entries (do NOT re-suggest):\n${rejectedSample.map((e) => e.termJa).join(", ")}${moreSuffix}`,
     );
   }
   const existingList = contextParts.join("");
 
   // Truncate texts for cost control
-  const sourceTruncated = episode.sourceText.slice(0, 4000);
-  const translatedTruncated = translation.translatedText.slice(0, 4000);
+  const sourceTruncated = episode.sourceText.slice(0, EXTRACT_TRUNC_CHARS);
+  const translatedTruncated = translation.translatedText.slice(0, EXTRACT_TRUNC_CHARS);
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -184,7 +203,7 @@ export async function extractGlossaryTerms(
 
   // Validate and convert entries — cap at 5 per episode, auto-register as confirmed
   const validCategories = new Set(["character", "place", "term", "skill", "honorific"]);
-  const entries: GlossaryEntryInput[] = rawEntries
+  const mappedEntries: GlossaryEntryInput[] = rawEntries
     .filter((e) => e.term_ja && e.term_ko && e.category && validCategories.has(e.category))
     .filter((e) => !existingTerms.has(e.term_ja!))
     .slice(0, 5)
@@ -203,6 +222,26 @@ export async function extractGlossaryTerms(
         provenanceTranslationId: payload.translationId,
       };
     });
+
+  // Grep validation gate: drop hallucinations
+  const { accepted: entries, rejected: droppedByValidation } = validateTermsAgainstCorpus(
+    mappedEntries,
+    {
+      sourceTexts: [episode.sourceText],
+      translatedTexts: [translation.translatedText],
+    },
+  );
+  if (droppedByValidation.length > 0) {
+    logger.info("Extract-glossary validation dropped terms", {
+      novelId: payload.novelId,
+      episodeNumber: payload.episodeNumber,
+      droppedCount: droppedByValidation.length,
+      sampleDropped: droppedByValidation.slice(0, 3).map((d) => ({
+        termJa: d.term.termJa,
+        reason: d.reason,
+      })),
+    });
+  }
 
   if (entries.length === 0) return { imported: 0, skipped: 0 };
 
