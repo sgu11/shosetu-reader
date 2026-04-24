@@ -1,5 +1,7 @@
 # Shosetu Reader
 
+**English** · [한국어](README.ko.md)
+
 A modular-monolith reading platform for Japanese web novels from
 [Syosetu](https://syosetu.com/) with JP→KR translation. The app combines
 Next.js, PostgreSQL, Redis-backed background jobs, and OpenRouter for a
