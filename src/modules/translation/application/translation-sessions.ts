@@ -24,7 +24,10 @@ export interface SessionAdvancePayload {
   novelId: string;
   episodeIds: string[];
   currentIndex: number;
+  reorderAttempts?: number;
 }
+
+const MAX_REORDER_RETRIES = 5;
 
 export interface SessionSummaryPayload {
   sessionId: string;
@@ -160,13 +163,34 @@ export async function advanceSession(
     return;
   }
 
-  // Ordering guard — reject out-of-order advances
+  // Ordering guard — re-enqueue out-of-order advances with backoff
   if (payload.currentIndex !== session.expectedNextIndex) {
-    logger.error("Session advance rejected due to ordering mismatch", {
+    const attempts = (payload.reorderAttempts ?? 0) + 1;
+    if (attempts > MAX_REORDER_RETRIES) {
+      logger.error("Session advance permanently out-of-order; dropping", {
+        sessionId: payload.sessionId,
+        expectedNextIndex: session.expectedNextIndex,
+        actualIndex: payload.currentIndex,
+        attempts,
+      });
+      return;
+    }
+    logger.warn("Session advance out-of-order; re-enqueueing with backoff", {
       sessionId: payload.sessionId,
       expectedNextIndex: session.expectedNextIndex,
       actualIndex: payload.currentIndex,
+      attempts,
     });
+    const jobQueue = getJobQueue();
+    await jobQueue.enqueue(
+      "translation.session-advance",
+      { ...payload, reorderAttempts: attempts } as SessionAdvancePayload,
+      {
+        entityType: "translation-session",
+        entityId: payload.sessionId,
+        delayMs: 5_000 * attempts,
+      },
+    );
     return;
   }
 
