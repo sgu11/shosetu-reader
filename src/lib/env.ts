@@ -12,6 +12,12 @@ const serverEnvSchema = z.object({
   OPENROUTER_SUMMARY_MODEL: z.string().optional(),
   OPENROUTER_EXTRACTION_MODEL: z.string().optional(),
   OPENROUTER_TITLE_MODEL: z.string().optional(),
+  GLOSSARY_MAX_PROMPT_ENTRIES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .default(200),
   ADMIN_API_KEY: z.string().optional(),
   TRANSLATION_COST_BUDGET_USD: z.coerce.number().positive().optional(),
   DEMO_MODE: z
@@ -36,6 +42,7 @@ const parsedEnv = serverEnvSchema.safeParse({
   OPENROUTER_SUMMARY_MODEL: process.env.OPENROUTER_SUMMARY_MODEL,
   OPENROUTER_EXTRACTION_MODEL: process.env.OPENROUTER_EXTRACTION_MODEL,
   OPENROUTER_TITLE_MODEL: process.env.OPENROUTER_TITLE_MODEL,
+  GLOSSARY_MAX_PROMPT_ENTRIES: process.env.GLOSSARY_MAX_PROMPT_ENTRIES,
   ADMIN_API_KEY: process.env.ADMIN_API_KEY,
   TRANSLATION_COST_BUDGET_USD: process.env.TRANSLATION_COST_BUDGET_USD,
   DEMO_MODE: process.env.DEMO_MODE,

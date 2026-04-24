@@ -1,4 +1,6 @@
-const MAX_PROMPT_ENTRIES = 50;
+import { env } from "@/lib/env";
+
+const MAX_PROMPT_ENTRIES = env.GLOSSARY_MAX_PROMPT_ENTRIES;
 
 export interface GlossaryPromptEntry {
   termJa: string;
