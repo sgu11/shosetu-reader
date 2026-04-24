@@ -26,31 +26,9 @@ export async function updateReadingProgress(
   const now = new Date();
 
   // Upsert reading progress
-  const [existing] = await db
-    .select({ id: readingProgress.id })
-    .from(readingProgress)
-    .where(
-      and(
-        eq(readingProgress.userId, userId),
-        eq(readingProgress.novelId, episode.novelId),
-      ),
-    )
-    .limit(1);
-
-  if (existing) {
-    await db
-      .update(readingProgress)
-      .set({
-        currentEpisodeId: input.episodeId,
-        currentLanguage: input.language,
-        scrollAnchor: input.scrollAnchor ?? null,
-        progressPercent: input.progressPercent ?? null,
-        lastReadAt: now,
-        updatedAt: now,
-      })
-      .where(eq(readingProgress.id, existing.id));
-  } else {
-    await db.insert(readingProgress).values({
+  await db
+    .insert(readingProgress)
+    .values({
       userId,
       novelId: episode.novelId,
       currentEpisodeId: input.episodeId,
@@ -58,8 +36,18 @@ export async function updateReadingProgress(
       scrollAnchor: input.scrollAnchor ?? null,
       progressPercent: input.progressPercent ?? null,
       lastReadAt: now,
+    })
+    .onConflictDoUpdate({
+      target: [readingProgress.userId, readingProgress.novelId],
+      set: {
+        currentEpisodeId: input.episodeId,
+        currentLanguage: input.language,
+        scrollAnchor: input.scrollAnchor ?? null,
+        progressPercent: input.progressPercent ?? null,
+        lastReadAt: now,
+        updatedAt: now,
+      },
     });
-  }
 
   await recordReadingEvent(userId, episode.novelId, input.episodeId, now);
 }
@@ -86,11 +74,14 @@ async function recordReadingEvent(
 
   if (recent) return;
 
-  await db.insert(readingEvents).values({
-    userId,
-    novelId,
-    episodeId,
-    eventKind: "opened",
-    createdAt: now,
-  });
+  await db
+    .insert(readingEvents)
+    .values({
+      userId,
+      novelId,
+      episodeId,
+      eventKind: "opened",
+      createdAt: now,
+    })
+    .onConflictDoNothing();
 }
