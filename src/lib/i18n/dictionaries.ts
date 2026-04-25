@@ -107,6 +107,9 @@ export const dictionaries = {
     "ingest.reingestAllStarted": "Re-fetching {reset} episodes in background",
     "ingest.reingestNone": "No episodes to re-ingest",
     "ingest.reingestConfirm": "This will re-fetch all episodes from the source. Continue?",
+    "ingest.bulkRetranslate": "Re-translate all",
+    "ingest.bulkRetranslateStarted": "Re-translating {total} episodes with {model}",
+    "ingest.bulkRetranslateNone": "No translated episodes to re-translate",
 
     // Reader
     "reader.episodeList": "Episode list",
@@ -402,6 +405,9 @@ export const dictionaries = {
     "ingest.reingestAllStarted": "{reset}화 백그라운드에서 재수집 시작",
     "ingest.reingestNone": "재수집할 에피소드가 없습니다",
     "ingest.reingestConfirm": "모든 에피소드를 원본에서 다시 가져옵니다. 계속하시겠습니까?",
+    "ingest.bulkRetranslate": "전체 재번역",
+    "ingest.bulkRetranslateStarted": "{total}화 {model}로 재번역 중",
+    "ingest.bulkRetranslateNone": "재번역할 번역된 에피소드가 없습니다",
 
     // Reader
     "reader.episodeList": "에피소드 목록",

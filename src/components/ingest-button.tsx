@@ -193,6 +193,24 @@ export function IngestButton({ novelId }: Props) {
       setActiveJobId(data.jobId);
     });
 
+  const handleBulkRetranslate = () =>
+    run(async () => {
+      const res = await fetch(`/api/novels/${novelId}/bulk-retranslate`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setResult(typeof data.error === "string" ? data.error : t("ingest.requestFailed"));
+        setResultTone("error");
+        return;
+      }
+      if (data.total === 0) {
+        setResult(t("ingest.bulkRetranslateNone"));
+        setResultTone("info");
+      } else {
+        setResult(t("ingest.bulkRetranslateStarted", { total: data.total, model: data.targetModel }));
+        setResultTone("info");
+      }
+    });
+
   const handleAbortTranslation = () =>
     run(async () => {
       const res = await fetch(`/api/novels/${novelId}/translate-session/abort`, { method: "POST" });
@@ -273,6 +291,13 @@ export function IngestButton({ novelId }: Props) {
               className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-muted transition-colors hover:text-foreground hover:bg-surface-strong"
             >
               {t("ingest.bulkTranslateAll")}
+            </button>
+            <button
+              type="button"
+              onClick={handleBulkRetranslate}
+              className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-muted transition-colors hover:text-foreground hover:bg-surface-strong"
+            >
+              {t("ingest.bulkRetranslate")}
             </button>
 
             <div className="my-1 border-t border-border" />

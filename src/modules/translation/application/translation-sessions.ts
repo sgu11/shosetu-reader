@@ -65,6 +65,7 @@ export interface SessionSummaryPayload {
 export async function createTranslationSession(
   novelId: string,
   episodeIds: string[],
+  modelNameOverride?: string,
 ): Promise<{ sessionId: string }> {
   const db = getDb();
   const userId = await resolveUserId();
@@ -79,7 +80,7 @@ export async function createTranslationSession(
     .where(eq(translationSettings.userId, userId))
     .limit(1);
 
-  const modelName = settings?.modelName ?? env.OPENROUTER_DEFAULT_MODEL;
+  const modelName = modelNameOverride ?? settings?.modelName ?? env.OPENROUTER_DEFAULT_MODEL;
   const globalPrompt = settings?.globalPrompt ?? "";
 
   // Load glossary version
