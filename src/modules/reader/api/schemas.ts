@@ -60,6 +60,16 @@ export const readerPayloadSchema = z.object({
       progressPercent: z.number().nullable(),
     })
     .nullable(),
+  glossary: z.array(
+    z.object({
+      termJa: z.string(),
+      termKo: z.string(),
+      category: z.enum(["character", "place", "term", "skill", "honorific"]),
+      notes: z.string().nullable(),
+      importance: z.number().int(),
+    }),
+  ),
+  styleGuide: z.string().nullable(),
 });
 
 export type ReaderPayload = z.infer<typeof readerPayloadSchema>;

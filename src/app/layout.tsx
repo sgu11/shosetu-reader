@@ -1,23 +1,30 @@
 import type { Metadata, Viewport } from "next";
-import { Source_Code_Pro, Noto_Serif_JP } from "next/font/google";
+import { Newsreader, JetBrains_Mono, Noto_Serif_JP } from "next/font/google";
 import { cookies } from "next/headers";
-import { Nav } from "@/components/nav";
+import { Masthead } from "@/components/masthead";
 import { LocaleProvider } from "@/components/locale-provider";
 import { RegisterSW } from "@/components/register-sw";
 import { OfflineBadge } from "@/components/offline-badge";
 import { getLocale } from "@/lib/i18n";
 import "./globals.css";
 
-const codeFont = Source_Code_Pro({
-  variable: "--font-code",
+const newsreaderFont = Newsreader({
+  variable: "--font-newsreader",
   subsets: ["latin"],
-  weight: ["400"],
+  weight: ["300", "400", "500", "600", "700"],
+  style: ["normal", "italic"],
 });
 
-const readerFont = Noto_Serif_JP({
-  variable: "--font-reader",
+const monoFont = JetBrains_Mono({
+  variable: "--font-jbm",
   subsets: ["latin"],
   weight: ["400", "500"],
+});
+
+const jpSerifFont = Noto_Serif_JP({
+  variable: "--font-jp-serif",
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -27,8 +34,17 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0a0a0a",
+  themeColor: "#faf6ef",
 };
+
+type ThemeValue = "paper" | "sepia" | "night" | "system";
+
+function readThemeCookie(value: string | undefined): ThemeValue {
+  if (value === "paper" || value === "sepia" || value === "night" || value === "system") {
+    return value;
+  }
+  return "system";
+}
 
 export default async function RootLayout({
   children,
@@ -37,14 +53,13 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const cookieStore = await cookies();
-  const themeCookie = cookieStore.get("theme")?.value;
-  const theme = themeCookie === "light" ? "light" : themeCookie === "dark" ? "dark" : "system";
+  const theme = readThemeCookie(cookieStore.get("theme")?.value);
 
   return (
     <html
       lang={locale}
       data-theme={theme}
-      className={`${codeFont.variable} ${readerFont.variable} h-full antialiased`}
+      className={`${newsreaderFont.variable} ${monoFont.variable} ${jpSerifFont.variable} h-full antialiased`}
     >
       <head>
         <link
@@ -53,28 +68,12 @@ export default async function RootLayout({
           crossOrigin="anonymous"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-jp.min.css"
         />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/earlyaccess/nanumgothic.css"
-        />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/earlyaccess/nanummyeongjo.css"
-        />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/earlyaccess/nanumbarungothic.css"
-        />
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/gh/fonts-archive/MaruBuri/MaruBuri.css"
-        />
       </head>
       <body className="min-h-full flex flex-col">
         <LocaleProvider locale={locale}>
           <RegisterSW />
           <OfflineBadge />
-          <Nav />
+          <Masthead />
           {children}
         </LocaleProvider>
       </body>

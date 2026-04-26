@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { Eyebrow } from "@/components/eyebrow";
+import { RankingHero } from "@/components/ranking/ranking-hero";
+import { RankingRow } from "@/components/ranking/ranking-row";
 import { useTranslation } from "@/lib/i18n/client";
 
 type Period = "daily" | "weekly" | "monthly" | "quarterly";
@@ -18,7 +20,6 @@ interface RankingItem {
 }
 
 export default function RankingPage() {
-  const router = useRouter();
   const { t } = useTranslation();
   const [period, setPeriod] = useState<Period>("daily");
   const [items, setItems] = useState<RankingItem[]>([]);
@@ -54,28 +55,31 @@ export default function RankingPage() {
         setTitleKo(map);
       }
     } catch {
-      // translation is best-effort
+      // best-effort
     } finally {
       setTranslating(false);
     }
   }, []);
 
-  const fetchRanking = useCallback(async (p: Period) => {
-    setLoading(true);
-    setTitleKo({});
-    try {
-      const res = await fetch(`/api/ranking?period=${p}&limit=20`);
-      if (res.ok) {
-        const data = await res.json();
-        setItems(data.items);
-        translateTitles(data.items);
+  const fetchRanking = useCallback(
+    async (p: Period) => {
+      setLoading(true);
+      setTitleKo({});
+      try {
+        const res = await fetch(`/api/ranking?period=${p}&limit=20`);
+        if (res.ok) {
+          const data = await res.json();
+          setItems(data.items);
+          translateTitles(data.items);
+        }
+      } catch {
+        // silent
+      } finally {
+        setLoading(false);
       }
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  }, [translateTitles]);
+    },
+    [translateTitles],
+  );
 
   useEffect(() => {
     fetchRanking(period);
@@ -94,9 +98,7 @@ export default function RankingPage() {
         const data = await res.json();
         setItems((prev) =>
           prev.map((item) =>
-            item.ncode === ncode
-              ? { ...item, novelId: data.novel.id }
-              : item,
+            item.ncode === ncode ? { ...item, novelId: data.novel.id } : item,
           ),
         );
       }
@@ -107,119 +109,82 @@ export default function RankingPage() {
     }
   }
 
+  const heroItem = items[0];
+  const restItems = items.slice(1);
+
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-10">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-normal leading-none tracking-tight">
-          {t("ranking.title")}
-        </h1>
-        <p className="text-sm text-muted">
-          {t("ranking.subtitle")}
-        </p>
-      </div>
-
-      {/* Period tabs */}
-      <div className="flex rounded-full border border-border p-0.5 self-start">
-        {periods.map((p) => (
-          <button
-            key={p.value}
-            type="button"
-            onClick={() => setPeriod(p.value)}
-            className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
-              period === p.value
-                ? "bg-surface-strong text-foreground"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Ranking list */}
-      {loading ? (
-        <div className="surface-card rounded-xl p-8 text-center text-sm text-muted">
-          {t("ranking.loading")}
-        </div>
-      ) : items.length === 0 ? (
-        <div className="surface-card rounded-xl p-8 text-center text-sm text-muted">
-          {t("ranking.empty")}
-        </div>
-      ) : (
-        <div className="space-y-1">
-          {items.map((item) => (
-            <div
-              key={item.ncode}
-              className="surface-card flex items-center gap-4 rounded-xl px-5 py-4"
-            >
-              {/* Rank */}
-              <span className="w-8 shrink-0 text-center text-sm font-medium text-muted">
-                {item.rank}
-              </span>
-
-              {/* Info */}
-              <div className="min-w-0 flex-1">
-                <a
-                  href={item.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group"
-                >
-                  {titleKo[item.ncode] && (
-                    <p className="truncate text-sm font-medium group-hover:text-accent transition-colors">
-                      {titleKo[item.ncode]}
-                    </p>
-                  )}
-                  <p className={`truncate text-sm transition-colors ${
-                    titleKo[item.ncode]
-                      ? "text-muted group-hover:text-muted/80"
-                      : "font-medium group-hover:text-accent"
-                  }`}>
-                    {item.title}
-                  </p>
-                </a>
-                <div className="flex items-center gap-3 text-xs text-muted">
-                  <span>{item.authorName}</span>
-                  <span>{item.totalEpisodes} {t("ranking.eps")}</span>
-                </div>
-              </div>
-
-              {/* Action */}
-              {item.novelId ? (
-                <button
-                  type="button"
-                  onClick={() => router.push(`/novels/${item.novelId}`)}
-                  className="btn-pill btn-secondary shrink-0 text-xs min-w-[5rem]"
-                >
-                  {t("ranking.view")}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleRegister(item.ncode)}
-                  disabled={registering === item.ncode}
-                  className="btn-pill btn-accent shrink-0 text-xs min-w-[5rem]"
-                >
-                  {registering === item.ncode ? (
-                    <svg className="mx-auto h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                  ) : t("ranking.register")}
-                </button>
-              )}
-            </div>
-          ))}
-
-          {/* Translating indicator */}
-          {translating && (
-            <p className="text-center text-xs text-muted py-2">
-              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent mr-1.5 align-middle" />
-              {t("ranking.translatingTitles")}
+    <main className="frame-paper paper-grain flex flex-1 flex-col">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-14 py-10">
+        <header className="flex flex-col items-start justify-between gap-4 md:flex-row md:items-end">
+          <div>
+            <Eyebrow>{t("ranking.eyebrow")}</Eyebrow>
+            <h1 className="mt-2 mb-1 font-serif text-5xl font-normal tracking-tight text-foreground md:text-6xl">
+              <span className="italic">{t("ranking.headlineFlair")}</span>{" "}
+              {t("ranking.headlineMain")}
+            </h1>
+            <p className="m-0 font-serif text-sm text-secondary">
+              {t("ranking.tagline")}
             </p>
-          )}
-        </div>
-      )}
+          </div>
+
+          <div className="surface-card flex gap-1 rounded-full p-1">
+            {periods.map((p) => (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => setPeriod(p.value)}
+                className={`rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
+                  period === p.value
+                    ? "bg-deep text-accent-contrast"
+                    : "text-secondary hover:bg-surface-strong"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        {loading ? (
+          <div className="surface-card rounded-xl p-8 text-center text-sm text-muted">
+            {t("ranking.loading")}
+          </div>
+        ) : items.length === 0 ? (
+          <div className="surface-card rounded-xl p-8 text-center text-sm text-muted">
+            {t("ranking.empty")}
+          </div>
+        ) : (
+          <>
+            {heroItem ? (
+              <RankingHero
+                item={heroItem}
+                titleKo={titleKo[heroItem.ncode]}
+                onRegister={handleRegister}
+                registering={registering === heroItem.ncode}
+              />
+            ) : null}
+
+            <div>
+              {restItems.map((item) => (
+                <RankingRow
+                  key={item.ncode}
+                  item={item}
+                  titleKo={titleKo[item.ncode]}
+                  onRegister={handleRegister}
+                  registering={registering === item.ncode}
+                />
+              ))}
+            </div>
+
+            {translating ? (
+              <p className="py-2 text-center text-xs text-muted">
+                <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent align-middle" />
+                {t("ranking.translatingTitles")}
+              </p>
+            ) : null}
+          </>
+        )}
+      </div>
     </main>
   );
 }

@@ -51,11 +51,8 @@ const CONTENT_WIDTHS = [
 ];
 
 const FONT_FAMILIES = [
-  { value: "noto-serif-jp", label: "Noto Serif JP", css: "'Noto Serif JP', serif" },
-  { value: "nanum-myeongjo", label: "Nanum Myeongjo", css: "'Nanum Myeongjo', serif" },
-  { value: "nanum-gothic", label: "Nanum Gothic", css: "'Nanum Gothic', sans-serif" },
-  { value: "nanum-barun-gothic", label: "NanumBarunGothic", css: "'Nanum Barun Gothic', sans-serif" },
-  { value: "maruburi", label: "MaruBuri", css: "'MaruBuri', serif" },
+  { value: "newsreader", label: "Newsreader", css: "var(--font-newsreader), Georgia, serif" },
+  { value: "noto-serif-jp", label: "Noto Serif JP", css: "var(--font-jp-serif), 'Noto Serif JP', serif" },
   { value: "pretendard", label: "Pretendard", css: "'Pretendard JP Variable', 'Pretendard JP', system-ui, sans-serif" },
 ];
 
@@ -67,7 +64,7 @@ const FONT_WEIGHTS = [
 
 function applyReaderStyles(prefs: ReaderPrefs) {
   const fontPx = FONT_SIZES.find((f) => f.value === prefs.fontSize)?.px ?? 16;
-  const fontCss = FONT_FAMILIES.find((f) => f.value === prefs.fontFamily)?.css ?? "'Noto Serif JP', serif";
+  const fontCss = FONT_FAMILIES.find((f) => f.value === prefs.fontFamily)?.css ?? "var(--font-newsreader), Georgia, serif";
   const weightCss = FONT_WEIGHTS.find((w) => w.value === prefs.fontWeight)?.css ?? "400";
   document.documentElement.style.setProperty("--reader-font-size", `${fontPx}px`);
   document.documentElement.style.setProperty("--reader-line-height", prefs.lineHeight);
@@ -83,8 +80,8 @@ export function ReaderSettings() {
     fontSize: "medium",
     lineHeight: "1.8",
     contentWidth: "800",
-    fontFamily: "nanum-myeongjo",
-    fontWeight: "bold",
+    fontFamily: "newsreader",
+    fontWeight: "normal",
   });
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -96,8 +93,8 @@ export function ReaderSettings() {
         fontSize: saved.fontSize ?? "medium",
         lineHeight: saved.lineHeight ?? "1.8",
         contentWidth: saved.contentWidth ?? "800",
-        fontFamily: saved.fontFamily ?? "nanum-myeongjo",
-        fontWeight: saved.fontWeight ?? "bold",
+        fontFamily: saved.fontFamily ?? "newsreader",
+        fontWeight: saved.fontWeight ?? "normal",
       };
       applyReaderStyles(loaded);
       const frame = requestAnimationFrame(() => {

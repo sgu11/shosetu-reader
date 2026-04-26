@@ -5,7 +5,7 @@ import { novels } from "@/lib/db/schema/novels";
 import { translations } from "@/lib/db/schema/translations";
 import { episodes } from "@/lib/db/schema/episodes";
 
-export type Range = "30d" | "90d" | "all";
+export type Range = "7d" | "30d" | "90d" | "all";
 
 export interface WeeklyBucket {
   weekStart: string;
@@ -30,6 +30,7 @@ export interface ReadingStats {
   range: Range;
   totalEpisodesRead: number;
   uniqueEpisodes: number;
+  estimatedHoursRead: number;
   currentStreakDays: number;
   longestStreakDays: number;
   weeklyBuckets: WeeklyBucket[];
@@ -39,7 +40,7 @@ export interface ReadingStats {
 
 function rangeStart(range: Range): Date | null {
   if (range === "all") return null;
-  const days = range === "30d" ? 30 : 90;
+  const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - days);
   d.setUTCHours(0, 0, 0, 0);
@@ -187,10 +188,15 @@ export async function getReadingStats(
     costUsd: Number(row.cost),
   }));
 
+  // Cheap reading-time estimate: assume ~4 minutes per episode.
+  // DB has no per-event duration; this is good enough until we track time.
+  const estimatedHoursRead = Math.round((uniqueEpisodes * 4) / 60 * 10) / 10;
+
   return {
     range,
     totalEpisodesRead: total,
     uniqueEpisodes,
+    estimatedHoursRead,
     currentStreakDays: streak.current,
     longestStreakDays: streak.longest,
     weeklyBuckets,

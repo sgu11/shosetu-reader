@@ -1,11 +1,14 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getReaderPayload } from "@/modules/reader/application/get-reader-payload";
-import { ProgressTracker } from "@/components/progress-tracker";
-import { TranslationToggle } from "@/components/translation-toggle";
-import { ReaderSettings } from "@/components/reader-settings";
+import { ChapterHeading } from "@/components/reader/chapter-heading";
 import { ComparePane } from "@/components/reader/compare-pane";
+import { GlossaryDrawer } from "@/components/reader/glossary-drawer";
+import { PacingBar } from "@/components/reader/pacing-bar";
+import { ProgressTracker } from "@/components/progress-tracker";
+import { ReaderSettings } from "@/components/reader-settings";
+import { TranslationToggle } from "@/components/translation-toggle";
 import { getLocale, t } from "@/lib/i18n";
+import { getReaderPayload } from "@/modules/reader/application/get-reader-payload";
 
 interface Props {
   params: Promise<{ episodeId: string }>;
@@ -31,6 +34,8 @@ export default async function ReaderPage({ params, searchParams }: Props) {
     configuredModel,
     navigation,
     progress,
+    glossary,
+    styleGuide,
   } = payload;
   const paragraphs = episode.sourceTextJa?.split("\n") ?? [];
   const prefaceParagraphs = episode.prefaceJa?.split("\n") ?? [];
@@ -38,6 +43,7 @@ export default async function ReaderPage({ params, searchParams }: Props) {
   const hasPreface = prefaceParagraphs.length > 0 && episode.prefaceJa;
   const hasAfterword = afterwordParagraphs.length > 0 && episode.afterwordJa;
   const hasAvailableTranslation = translation?.status === "available";
+  const hasGlossary = glossary.length > 0 || styleGuide;
   const initialReaderLanguage =
     progress?.currentLanguage ?? (locale === "ko" && hasAvailableTranslation ? "ko" : "ja");
 
@@ -57,39 +63,42 @@ export default async function ReaderPage({ params, searchParams }: Props) {
     availableTranslations.find((a) => a.modelName !== translation?.modelName)?.modelName ?? null;
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="frame-paper paper-grain flex min-h-screen flex-col">
       <ProgressTracker
         episodeId={episodeId}
         initialLanguage={initialReaderLanguage}
         initialScrollAnchor={progress?.scrollAnchor ?? null}
         initialProgressPercent={progress?.progressPercent ?? null}
       />
+      <PacingBar />
 
-      {/* Back link — scrolls away */}
       <div className="border-b border-border">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-6 py-2">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-2.5">
           <Link
             href={`/novels/${novel.id}`}
-            className="text-sm text-muted hover:text-foreground transition-colors truncate"
+            className="flex min-w-0 items-center gap-2 truncate font-serif text-sm text-secondary transition-colors hover:text-foreground"
           >
-            &larr; {novel.titleJa}
+            <span aria-hidden>←</span>
+            <span className="truncate">{novel.titleJa}</span>
           </Link>
-          <span className="text-xs text-muted">#{episode.episodeNumber}</span>
+          <span className="font-mono text-[10px] tracking-wider text-muted">
+            #{episode.episodeNumber}
+            {episode.titleJa ? ` — ${episode.titleJa}` : ""}
+          </span>
         </div>
       </div>
 
-      {/* Sticky navigation bar — prev/next + translation controls */}
       <nav className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-2 px-6 py-2">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-6 py-2">
           {navigation.prevEpisodeId ? (
             <Link
               href={`/reader/${navigation.prevEpisodeId}`}
-              className="shrink-0 rounded-md bg-surface-strong px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-contrast"
+              className="shrink-0 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-secondary transition-colors hover:bg-surface-strong hover:text-foreground"
             >
-              &larr;
+              ←
             </Link>
           ) : (
-            <span className="invisible shrink-0 rounded-md bg-surface-strong px-4 py-2 text-sm font-medium">&larr;</span>
+            <span className="invisible shrink-0 rounded-full px-3 py-1.5 text-sm font-medium">←</span>
           )}
 
           <div className="flex min-w-0 items-center gap-2">
@@ -125,140 +134,136 @@ export default async function ReaderPage({ params, searchParams }: Props) {
           {navigation.nextEpisodeId ? (
             <Link
               href={`/reader/${navigation.nextEpisodeId}`}
-              className="shrink-0 rounded-md bg-surface-strong px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-contrast"
+              className="shrink-0 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-secondary transition-colors hover:bg-surface-strong hover:text-foreground"
             >
-              &rarr;
+              →
             </Link>
           ) : (
-            <span className="invisible shrink-0 rounded-md bg-surface-strong px-4 py-2 text-sm font-medium">&rarr;</span>
+            <span className="invisible shrink-0 rounded-full px-3 py-1.5 text-sm font-medium">→</span>
           )}
         </div>
       </nav>
 
-      {/* Reading area */}
-      <main className="reader-area mx-auto w-full flex-1 px-6 py-10">
-        {payload.compareTranslation && translation && (
-          <div className="mb-8">
-            <ComparePane
-              episodeId={episodeId}
-              sourceParagraphs={paragraphs}
-              primary={{
-                modelName: translation.modelName,
-                translatedText: translation.translatedText,
-              }}
-              compare={payload.compareTranslation}
-            />
-          </div>
-        )}
-
-        {/* Episode title */}
-        {episode.titleJa && (
-          <div className="mb-10 text-center">
-            {locale === "ko" && episode.titleKo ? (
-              <>
-                <h1 className="text-2xl font-normal tracking-tight">{episode.titleKo}</h1>
-                <p className="mt-1 text-sm text-muted/60">{episode.titleJa}</p>
-              </>
-            ) : (
-              <h1 className="text-2xl font-normal tracking-tight">{episode.titleJa}</h1>
-            )}
-          </div>
-        )}
-
-        {/* Episode body */}
-        {paragraphs.length > 0 ? (
-          <>
-            {/* Original Japanese text */}
-            <div
-              data-original-text
-              className="reader-text space-y-1 tracking-wide text-secondary"
-            >
-              {hasPreface && (
-                <>
-                  <div data-section="preface" className="text-muted/80">
-                    {prefaceParagraphs.map((line, i) => (
-                      <p
-                        key={`pf-${i}`}
-                        className={line.trim() === "" ? "h-6" : ""}
-                      >
-                        {line}
-                      </p>
-                    ))}
-                  </div>
-                  <hr className="my-8 border-border/50" />
-                </>
-              )}
-              {paragraphs.map((line, i) => (
-                <p
-                  key={i}
-                  data-reader-paragraph={`p-${i}`}
-                  className={line.trim() === "" ? "h-6" : ""}
-                >
-                  {line}
-                </p>
-              ))}
-              {hasAfterword && (
-                <>
-                  <hr className="my-8 border-border/50" />
-                  <div data-section="afterword" className="text-muted/80">
-                    {afterwordParagraphs.map((line, i) => (
-                      <p
-                        key={`aw-${i}`}
-                        className={line.trim() === "" ? "h-6" : ""}
-                      >
-                        {line}
-                      </p>
-                    ))}
-                  </div>
-                </>
-              )}
+      <div
+        className={`mx-auto grid w-full max-w-6xl flex-1 ${
+          hasGlossary ? "lg:grid-cols-[1fr_300px]" : ""
+        }`}
+      >
+        <main className="reader-area mx-auto w-full px-6 py-10 lg:px-12">
+          {payload.compareTranslation && translation && (
+            <div className="mb-8">
+              <ComparePane
+                episodeId={episodeId}
+                sourceParagraphs={paragraphs}
+                primary={{
+                  modelName: translation.modelName,
+                  translatedText: translation.translatedText,
+                }}
+                compare={payload.compareTranslation}
+              />
             </div>
-            {/* Korean translation (populated by TranslationToggle) */}
-            <div
-              data-reader-text
-              className="reader-text hidden space-y-1 text-secondary"
-            />
-          </>
-        ) : (
-          <div className="surface-card rounded-xl p-8 text-center text-sm text-muted">
-            {t(locale, "reader.noContent")}
-          </div>
-        )}
-      </main>
-
-      {/* Bottom navigation */}
-      <footer className="border-t border-border bg-background/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-6 py-4">
-          {navigation.prevEpisodeId ? (
-            <Link
-              href={`/reader/${navigation.prevEpisodeId}`}
-              className="rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-contrast"
-            >
-              &larr; {t(locale, "reader.previous")}
-            </Link>
-          ) : (
-            <span className="invisible rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium">{t(locale, "reader.previous")}</span>
           )}
 
-          <Link
-            href={`/novels/${novel.id}`}
-            className="text-xs text-muted hover:text-foreground transition-colors"
-          >
-            #{episode.episodeNumber}
-          </Link>
+          <ChapterHeading
+            episodeNumber={episode.episodeNumber}
+            titleJa={episode.titleJa}
+            titleKo={episode.titleKo}
+            locale={locale}
+          />
 
-          {navigation.nextEpisodeId ? (
-            <Link
-              href={`/reader/${navigation.nextEpisodeId}`}
-              className="rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-contrast"
-            >
-              {t(locale, "reader.next")} &rarr;
-            </Link>
+          {paragraphs.length > 0 ? (
+            <>
+              <div
+                data-original-text
+                className="reader-text space-y-1 tracking-wide text-secondary"
+              >
+                {hasPreface && (
+                  <>
+                    <div data-section="preface" className="text-muted/80">
+                      {prefaceParagraphs.map((line, i) => (
+                        <p
+                          key={`pf-${i}`}
+                          className={line.trim() === "" ? "h-6" : ""}
+                        >
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                    <hr className="my-8 border-border/50" />
+                  </>
+                )}
+                {paragraphs.map((line, i) => (
+                  <p
+                    key={i}
+                    data-reader-paragraph={`p-${i}`}
+                    className={line.trim() === "" ? "h-6" : ""}
+                  >
+                    {line}
+                  </p>
+                ))}
+                {hasAfterword && (
+                  <>
+                    <hr className="my-8 border-border/50" />
+                    <div data-section="afterword" className="text-muted/80">
+                      {afterwordParagraphs.map((line, i) => (
+                        <p
+                          key={`aw-${i}`}
+                          className={line.trim() === "" ? "h-6" : ""}
+                        >
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div
+                data-reader-text
+                className="reader-text hidden space-y-1 text-secondary"
+              />
+            </>
           ) : (
-            <span className="invisible rounded-md bg-surface-strong px-5 py-2.5 text-sm font-medium">{t(locale, "reader.next")}</span>
+            <div className="surface-card rounded-xl p-8 text-center text-sm text-muted">
+              {t(locale, "reader.noContent")}
+            </div>
           )}
-        </div>
-      </footer>
+
+          <footer className="mt-10 flex items-center justify-between border-t border-border pt-5">
+            {navigation.prevEpisodeId ? (
+              <Link
+                href={`/reader/${navigation.prevEpisodeId}`}
+                className="font-serif text-sm italic text-secondary transition-colors hover:text-foreground"
+              >
+                ← {t(locale, "reader.previous")}
+              </Link>
+            ) : (
+              <span className="invisible font-serif text-sm">{t(locale, "reader.previous")}</span>
+            )}
+            <Link
+              href={`/novels/${novel.id}`}
+              className="font-mono text-xs text-muted transition-colors hover:text-foreground"
+            >
+              #{episode.episodeNumber}
+            </Link>
+            {navigation.nextEpisodeId ? (
+              <Link
+                href={`/reader/${navigation.nextEpisodeId}`}
+                className="font-serif text-sm italic text-secondary transition-colors hover:text-foreground"
+              >
+                {t(locale, "reader.next")} →
+              </Link>
+            ) : (
+              <span className="font-serif text-sm italic text-muted">
+                {t(locale, "reader.endOfNovel")}
+              </span>
+            )}
+          </footer>
+        </main>
+
+        {hasGlossary ? (
+          <GlossaryDrawer entries={glossary} styleGuide={styleGuide} />
+        ) : null}
+      </div>
     </div>
   );
 }

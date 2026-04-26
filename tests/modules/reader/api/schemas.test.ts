@@ -60,6 +60,16 @@ describe("readerPayloadSchema", () => {
         scrollAnchor: "p-12",
         progressPercent: 48,
       },
+      glossary: [
+        {
+          termJa: "魔師",
+          termKo: "마사",
+          category: "term",
+          notes: "마법을 쓰는 자.",
+          importance: 5,
+        },
+      ],
+      styleGuide: "존댓말 사용",
     });
 
     expect(result.success).toBe(true);

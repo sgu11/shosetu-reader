@@ -1,0 +1,111 @@
+/* Narou Reader — Editorial × Cozy design tokens */
+
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+
+:root {
+  /* Paper palette (cozy/sepia) */
+  --paper-50:  #faf6ef;
+  --paper-100: #f4ede0;
+  --paper-200: #ebe0cb;
+  --paper-300: #dccfb4;
+  --paper-400: #b8a988;
+  --paper-500: #8a7a5b;
+  --ink-900:   #1c1814;
+  --ink-800:   #2b2520;
+  --ink-700:   #3d3530;
+  --ink-600:   #5a4f45;
+  --ink-500:   #7a6e60;
+  --ink-400:   #9c8e7a;
+  --ink-300:   #b9ac95;
+
+  /* Editorial dark (inverted) */
+  --night-950: #0e0c0a;
+  --night-900: #14110d;
+  --night-800: #1c1814;
+  --night-700: #261f18;
+  --night-600: #3a2f23;
+  --night-500: #5b4c39;
+  --cream-100: #f1e8d6;
+  --cream-200: #d8cab1;
+  --cream-300: #a89878;
+
+  /* Accent palette (default = leaf, configurable via Tweaks) */
+  --accent: #5b8c5a;       /* botanical leaf green */
+  --accent-soft: #c8d8b8;
+  --accent-deep: #2f5a32;
+
+  /* Translation status */
+  --status-done:    #5b8c5a;
+  --status-queued:  #c08a3e;
+  --status-failed:  #b14a3a;
+
+  /* Type stacks */
+  --font-serif: 'Newsreader', 'Noto Serif JP', 'IBM Plex Serif', Georgia, serif;
+  --font-jp:    'Noto Serif JP', 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  --font-kr:    'Pretendard', 'Pretendard Variable', 'Apple SD Gothic Neo', sans-serif;
+  --font-sans:  'Pretendard', 'Inter', system-ui, sans-serif;
+  --font-mono:  'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Radius / shadow */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 14px;
+  --r-xl: 22px;
+  --shadow-paper: 0 1px 0 rgba(28,24,20,0.04), 0 8px 24px -12px rgba(28,24,20,0.18);
+  --shadow-deep:  0 1px 0 rgba(0,0,0,0.4), 0 24px 60px -20px rgba(0,0,0,0.6);
+}
+
+/* Common helpers used across artboards */
+.font-serif { font-family: var(--font-serif); }
+.font-jp    { font-family: var(--font-jp); }
+.font-kr    { font-family: var(--font-kr); }
+.font-sans  { font-family: var(--font-sans); }
+.font-mono  { font-family: var(--font-mono); }
+
+/* Hide scrollbars inside artboards */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* tate-chuu-yoko style numerals for chapter markers */
+.num-vert {
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle paper grain — a tiny svg noise overlay used as bg */
+.paper-grain {
+  background-image:
+    radial-gradient(rgba(120,90,40,0.045) 1px, transparent 1px),
+    radial-gradient(rgba(120,90,40,0.025) 1px, transparent 1px);
+  background-size: 3px 3px, 7px 7px;
+  background-position: 0 0, 1px 2px;
+}
+
+.night-grain {
+  background-image:
+    radial-gradient(rgba(255,230,180,0.025) 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+/* Shared interactive primitives */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 11px; line-height: 1;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(28,24,20,0.12);
+  color: var(--ink-700);
+  background: rgba(255,255,255,0.5);
+}
+.chip .dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+.chip.done   { color: var(--status-done); border-color: color-mix(in oklab, var(--status-done) 30%, transparent); }
+.chip.queued { color: var(--status-queued); border-color: color-mix(in oklab, var(--status-queued) 30%, transparent); }
+.chip.failed { color: var(--status-failed); border-color: color-mix(in oklab, var(--status-failed) 30%, transparent); }
+
+/* Artboard frame baseline */
+.frame-paper { background: var(--paper-50); color: var(--ink-900); }
+.frame-night { background: var(--night-900); color: var(--cream-100); }

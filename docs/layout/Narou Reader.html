@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>Narou Reader — Modern Redesign</title>
+  <link rel="stylesheet" href="tokens.css" />
+  <style>
+    html, body { margin: 0; background: #f0eee9; }
+    body { font-family: 'Pretendard', system-ui, sans-serif; }
+  </style>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="shared.jsx"></script>
+  <script type="text/babel" src="screens/home.jsx"></script>
+  <script type="text/babel" src="screens/library.jsx"></script>
+  <script type="text/babel" src="screens/reader.jsx"></script>
+  <script type="text/babel" src="screens/novel.jsx"></script>
+  <script type="text/babel" src="screens/ranking.jsx"></script>
+  <script type="text/babel" src="screens/settings.jsx"></script>
+
+  <script type="text/babel">
+    const W = 1280, H = 820;
+
+    function App() {
+      return (
+        <DesignCanvas>
+          <DCSection id="home" title="Home — 이어서 읽기" subtitle="Two takes on the landing experience: editorial paper vs. cozy night stand.">
+            <DCArtboard id="home-a" label="A · Editorial Daily" width={W} height={H}><HomeEditorial /></DCArtboard>
+            <DCArtboard id="home-b" label="B · Cozy Night Stand" width={W} height={H}><HomeNight /></DCArtboard>
+          </DCSection>
+
+          <DCSection id="library" title="Library · 서재" subtitle="Generated typographic covers, translation status surfaced inline.">
+            <DCArtboard id="lib-a" label="A · Shelf grid" width={W} height={H}><LibraryShelf /></DCArtboard>
+            <DCArtboard id="lib-b" label="B · Index ledger" width={W} height={H}><LibraryLedger /></DCArtboard>
+          </DCSection>
+
+          <DCSection id="reader" title="Reader — JA / KR" subtitle="Pinned glossary drawer + visible model switcher; pacing indicator.">
+            <DCArtboard id="rd-a" label="A · Parallel paper" width={W} height={H}><ReaderParallel /></DCArtboard>
+            <DCArtboard id="rd-b" label="B · Single column · focus" width={W} height={H}><ReaderFocus /></DCArtboard>
+          </DCSection>
+
+          <DCSection id="novel" title="Novel detail · episodes" subtitle="Per-novel inventory, glossary actions, and quality warnings.">
+            <DCArtboard id="nv-a" label="A · Editorial detail" width={W} height={H}><NovelDetail /></DCArtboard>
+            <DCArtboard id="nv-b" label="B · Compact + inventory" width={W} height={H}><NovelDetailDark /></DCArtboard>
+          </DCSection>
+
+          <DCSection id="ranking" title="Ranking · discovery" subtitle="Daily / weekly / monthly Syosetu charts with translated titles.">
+            <DCArtboard id="rk-a" label="A · Magazine top" width={W} height={H}><RankingMag /></DCArtboard>
+            <DCArtboard id="rk-b" label="B · Charts grid" width={W} height={H}><RankingCharts /></DCArtboard>
+          </DCSection>
+
+          <DCSection id="settings" title="Settings" subtitle="Reading + translation + cost — one calm surface.">
+            <DCArtboard id="set-a" label="A · Preferences" width={W} height={H}><SettingsScreen /></DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
-import { eq, and, lt, gt, desc } from "drizzle-orm";
+import { eq, and, lt, gt, desc, asc } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { episodes, novels, readingProgress, translations, translationSettings } from "@/lib/db/schema";
+import { episodes, novelGlossaries, novelGlossaryEntries, novels, readingProgress, translations, translationSettings } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { translateTexts } from "@/lib/translate-cache";
 import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
@@ -113,6 +113,30 @@ export async function getReaderPayload(
     )
     .limit(1);
 
+  const glossaryEntries = await db
+    .select({
+      termJa: novelGlossaryEntries.termJa,
+      termKo: novelGlossaryEntries.termKo,
+      category: novelGlossaryEntries.category,
+      notes: novelGlossaryEntries.notes,
+      importance: novelGlossaryEntries.importance,
+    })
+    .from(novelGlossaryEntries)
+    .where(
+      and(
+        eq(novelGlossaryEntries.novelId, novel.id),
+        eq(novelGlossaryEntries.status, "confirmed"),
+      ),
+    )
+    .orderBy(desc(novelGlossaryEntries.importance), asc(novelGlossaryEntries.termJa))
+    .limit(50);
+
+  const [glossaryMeta] = await db
+    .select({ glossary: novelGlossaries.glossary })
+    .from(novelGlossaries)
+    .where(eq(novelGlossaries.novelId, novel.id))
+    .limit(1);
+
   // Language preference is novel-wide and should persist across episodes.
   // Scroll position is episode-specific — only restore if same episode.
   const isSameEpisode = progressRow?.currentEpisodeId === episodeId;
@@ -189,5 +213,13 @@ export async function getReaderPayload(
       nextEpisodeId: nextEpisode?.id ?? null,
     },
     progress,
+    glossary: glossaryEntries.map((entry) => ({
+      termJa: entry.termJa,
+      termKo: entry.termKo,
+      category: entry.category,
+      notes: entry.notes,
+      importance: entry.importance,
+    })),
+    styleGuide: glossaryMeta?.glossary?.trim() ? glossaryMeta.glossary : null,
   };
 }

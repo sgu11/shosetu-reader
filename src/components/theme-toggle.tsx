@@ -3,15 +3,19 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { useTranslation } from "@/lib/i18n/client";
 
-type Theme = "dark" | "light" | "system";
+type Theme = "paper" | "sepia" | "night" | "system";
 
-const CYCLE: Record<Theme, Theme> = { system: "light", light: "dark", dark: "system" };
+const CYCLE: Record<Theme, Theme> = {
+  paper: "sepia",
+  sepia: "night",
+  night: "system",
+  system: "paper",
+};
 
 function getThemeSnapshot(): Theme {
   if (typeof document === "undefined") return "system";
   const v = document.documentElement.getAttribute("data-theme");
-  if (v === "light") return "light";
-  if (v === "dark") return "dark";
+  if (v === "paper" || v === "sepia" || v === "night") return v;
   return "system";
 }
 
@@ -30,7 +34,6 @@ function subscribeToTheme(callback: () => void) {
 
 function applyTheme(theme: Theme) {
   if (theme === "system") {
-    // Remove cookie so server defaults to "system"
     document.cookie = "theme=;path=/;max-age=0;SameSite=Lax";
   } else {
     document.cookie = `theme=${theme};path=/;max-age=${365 * 24 * 60 * 60};SameSite=Lax`;
@@ -38,10 +41,20 @@ function applyTheme(theme: Theme) {
   document.documentElement.setAttribute("data-theme", theme);
 }
 
-const ICONS: Record<Theme, string> = { dark: "\u263D", light: "\u2600", system: "\u25D0" };
-const LABELS: Record<Theme, "settings.themeDark" | "settings.themeLight" | "settings.themeSystem"> = {
-  dark: "settings.themeDark",
-  light: "settings.themeLight",
+const ICONS: Record<Theme, string> = {
+  paper: "☀",
+  sepia: "◑",
+  night: "☽",
+  system: "◐",
+};
+
+const LABELS: Record<
+  Theme,
+  "settings.themePaper" | "settings.themeSepia" | "settings.themeNight" | "settings.themeSystem"
+> = {
+  paper: "settings.themePaper",
+  sepia: "settings.themeSepia",
+  night: "settings.themeNight",
   system: "settings.themeSystem",
 };
 
