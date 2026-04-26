@@ -35,7 +35,6 @@ export default async function ReaderPage({ params, searchParams }: Props) {
     navigation,
     progress,
     glossary,
-    styleGuide,
   } = payload;
   const paragraphs = episode.sourceTextJa?.split("\n") ?? [];
   const prefaceParagraphs = episode.prefaceJa?.split("\n") ?? [];
@@ -43,7 +42,7 @@ export default async function ReaderPage({ params, searchParams }: Props) {
   const hasPreface = prefaceParagraphs.length > 0 && episode.prefaceJa;
   const hasAfterword = afterwordParagraphs.length > 0 && episode.afterwordJa;
   const hasAvailableTranslation = translation?.status === "available";
-  const hasGlossary = glossary.length > 0 || styleGuide;
+  const hasGlossary = glossary.length > 0;
   const initialReaderLanguage =
     progress?.currentLanguage ?? (locale === "ko" && hasAvailableTranslation ? "ko" : "ja");
 
@@ -260,9 +259,7 @@ export default async function ReaderPage({ params, searchParams }: Props) {
           </footer>
         </main>
 
-        {hasGlossary ? (
-          <GlossaryDrawer entries={glossary} styleGuide={styleGuide} />
-        ) : null}
+        {hasGlossary ? <GlossaryDrawer entries={glossary} /> : null}
       </div>
     </div>
   );

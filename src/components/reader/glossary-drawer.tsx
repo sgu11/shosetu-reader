@@ -11,10 +11,9 @@ interface GlossaryEntry {
 
 interface Props {
   entries: GlossaryEntry[];
-  styleGuide: string | null;
 }
 
-export async function GlossaryDrawer({ entries, styleGuide }: Props) {
+export async function GlossaryDrawer({ entries }: Props) {
   const locale = await getLocale();
 
   return (
@@ -32,11 +31,11 @@ export async function GlossaryDrawer({ entries, styleGuide }: Props) {
               className="border-b border-dashed border-border pb-3 last:border-b-0"
             >
               <div className="flex items-baseline gap-2">
-                <span className="font-jp text-base font-semibold text-foreground">
-                  {entry.termJa}
-                </span>
-                <span className="font-serif text-[13px] italic text-secondary">
+                <span className="font-serif text-base font-semibold text-foreground">
                   {entry.termKo}
+                </span>
+                <span className="font-jp text-[12px] text-muted">
+                  {entry.termJa}
                 </span>
                 <span className="ml-auto rounded-[3px] border border-border-strong px-1.5 py-0.5 font-mono text-[9px] text-muted">
                   {t(locale, `glossary.${entry.category}`)}
@@ -51,16 +50,6 @@ export async function GlossaryDrawer({ entries, styleGuide }: Props) {
           ))}
         </div>
       )}
-      {styleGuide ? (
-        <div className="mt-5 rounded-lg bg-surface-strong p-3">
-          <div className="font-mono text-[9.5px] uppercase tracking-wider text-muted">
-            {t(locale, "reader.styleGuideHeading")}
-          </div>
-          <p className="mt-1.5 font-sans text-[11px] leading-relaxed text-secondary">
-            {styleGuide}
-          </p>
-        </div>
-      ) : null}
     </aside>
   );
 }

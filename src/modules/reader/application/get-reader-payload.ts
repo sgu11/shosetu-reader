@@ -1,6 +1,6 @@
 import { eq, and, lt, gt, desc, asc } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { episodes, novelGlossaries, novelGlossaryEntries, novels, readingProgress, translations, translationSettings } from "@/lib/db/schema";
+import { episodes, novelGlossaryEntries, novels, readingProgress, translations, translationSettings } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { translateTexts } from "@/lib/translate-cache";
 import { resolveUserId } from "@/modules/identity/application/resolve-user-context";
@@ -113,7 +113,7 @@ export async function getReaderPayload(
     )
     .limit(1);
 
-  const glossaryEntries = await db
+  const allGlossaryEntries = await db
     .select({
       termJa: novelGlossaryEntries.termJa,
       termKo: novelGlossaryEntries.termKo,
@@ -128,14 +128,17 @@ export async function getReaderPayload(
         eq(novelGlossaryEntries.status, "confirmed"),
       ),
     )
-    .orderBy(desc(novelGlossaryEntries.importance), asc(novelGlossaryEntries.termJa))
-    .limit(50);
+    .orderBy(desc(novelGlossaryEntries.importance), asc(novelGlossaryEntries.termJa));
 
-  const [glossaryMeta] = await db
-    .select({ glossary: novelGlossaries.glossary })
-    .from(novelGlossaries)
-    .where(eq(novelGlossaries.novelId, novel.id))
-    .limit(1);
+  const episodeHaystack = [
+    episode.normalizedTextJa ?? "",
+    episode.prefaceJa ?? "",
+    episode.afterwordJa ?? "",
+    episode.titleJa ?? "",
+  ].join("\n");
+  const glossaryEntries = allGlossaryEntries.filter(
+    (entry) => entry.termJa.length > 0 && episodeHaystack.includes(entry.termJa),
+  );
 
   // Language preference is novel-wide and should persist across episodes.
   // Scroll position is episode-specific — only restore if same episode.
@@ -220,6 +223,6 @@ export async function getReaderPayload(
       notes: entry.notes,
       importance: entry.importance,
     })),
-    styleGuide: glossaryMeta?.glossary?.trim() ? glossaryMeta.glossary : null,
+    styleGuide: null,
   };
 }
