@@ -68,7 +68,7 @@ export function EpisodeList({ novelId, initialEpisodes, totalCount }: Props) {
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 {ep.translationStatus === "available" ? (
                   <span className="rounded-full bg-success/10 px-2 py-0.5 text-xs text-success" title={ep.translationModel ?? undefined}>
-                    KR
+                    KO
                   </span>
                 ) : isProcessing ? (
                   <EpisodeTranslationBadge

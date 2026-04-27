@@ -391,7 +391,7 @@ export function TranslationToggle({
                   : "cursor-not-allowed text-muted/30"
             }`}
           >
-            KR
+            KO
           </button>
         </div>
 

@@ -43,7 +43,7 @@ export function LocaleSwitcher() {
             : "text-muted hover:text-foreground"
         }`}
       >
-        KR
+        KO
       </button>
     </div>
   );

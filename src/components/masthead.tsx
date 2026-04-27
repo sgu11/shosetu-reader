@@ -28,7 +28,7 @@ function MastheadDate({ locale }: { locale: "en" | "ko" }) {
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");
   const yyyy = now.getFullYear();
-  const edition = locale === "ko" ? "KR EDITION" : "EN EDITION";
+  const edition = locale === "ko" ? "KO EDITION" : "EN EDITION";
   return (
     <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted">
       {mm} · {dd} · {yyyy} — {edition}
