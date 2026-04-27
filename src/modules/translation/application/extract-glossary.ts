@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { recordOpenRouterError, recordOpenRouterUsage } from "@/lib/ops-metrics";
 import { estimateCost } from "./cost-estimation";
 import { importGlossaryEntries, type GlossaryEntryInput } from "./glossary-entries";
+import { promoteSuggestedEntries } from "./promote-suggested-entries";
 import { validateTermsAgainstCorpus } from "./validate-terms";
 
 const EXTRACT_TRUNC_CHARS = 6000;
@@ -62,6 +63,25 @@ export async function extractGlossaryTerms(
 
   if (!episode?.sourceText || !translation?.translatedText) {
     return { imported: 0, skipped: 0 };
+  }
+
+  // Stage-2 cold-start: validate suggested (bootstrap-mined) entries
+  // against this episode's pair. Reinforces matches and decays
+  // mistranslated guesses. Pure DB work, no LLM call. Failures here
+  // never block extraction.
+  try {
+    await promoteSuggestedEntries(
+      payload.novelId,
+      episode.sourceText,
+      translation.translatedText,
+      payload.episodeNumber,
+    );
+  } catch (err) {
+    logger.warn("promoteSuggestedEntries failed (non-fatal)", {
+      novelId: payload.novelId,
+      episodeNumber: payload.episodeNumber,
+      err: err instanceof Error ? err.message : String(err),
+    });
   }
 
   // Dedup set: ALL existing termJa (whatever status)
