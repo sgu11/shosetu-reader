@@ -1,11 +1,18 @@
 /**
- * Source adapter registry. Holds one instance per site, optionally wrapped in
- * a per-host token bucket so concurrent calls from API routes and the worker
- * share one rate budget against the upstream domain.
+ * Source adapter registry. Holds one instance per site.
  *
  * `parseInput` is the entry point for register/URL parsing — tries every
  * adapter's URL matcher first, then falls back to bare-id matchers in a
  * deterministic priority order.
+ *
+ * Note on rate limiting: an earlier iteration wrapped each adapter in a
+ * promise-chain token bucket per host. That serialized every outbound fetch
+ * across the whole process — fine for a worker batch loop, but a hard
+ * deadlock for API routes when the worker was busy: a /ranking or /reader
+ * request would queue behind every pending ingest fetch and time out at
+ * 20s. The current design pushes throttling responsibility back to each
+ * caller (the ingest worker has its own per-novel sleep loop) and keeps
+ * the registry thin.
  */
 
 import type { SourceAdapter, SourceSite } from "../domain/source-adapter";
@@ -14,49 +21,11 @@ import { nocturneAdapter } from "./nocturne-adapter";
 import { kakuyomuAdapter } from "./kakuyomu-adapter";
 import { alphapolisAdapter } from "./alphapolis-adapter";
 
-class HostBucket {
-  private chain: Promise<unknown> = Promise.resolve();
-  private last = 0;
-
-  constructor(private readonly intervalMs: number) {}
-
-  async acquire(): Promise<void> {
-    const next = this.chain.then(async () => {
-      const now = Date.now();
-      const wait = Math.max(0, this.last + this.intervalMs - now);
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      this.last = Date.now();
-    });
-    this.chain = next.catch(() => undefined);
-    await next;
-  }
-}
-
-function withRateLimit(adapter: SourceAdapter, bucket: HostBucket): SourceAdapter {
-  const gate = async <T>(thunk: () => Promise<T>): Promise<T> => {
-    await bucket.acquire();
-    return thunk();
-  };
-  return {
-    ...adapter,
-    fetchNovelMetadata: (id) => gate(() => adapter.fetchNovelMetadata(id)),
-    fetchEpisodeList: (id) => gate(() => adapter.fetchEpisodeList(id)),
-    fetchEpisodeContent: (id, ep) => gate(() => adapter.fetchEpisodeContent(id, ep)),
-    fetchRanking: (period, limit) => gate(() => adapter.fetchRanking(period, limit)),
-  };
-}
-
-// Both syosetu and nocturne hit api.syosetu.com — share one bucket so the
-// upstream sees ≤1 req/s across the family even when both adapters are busy.
-const SYOSETU_FAMILY_BUCKET = new HostBucket(1000);
-const KAKUYOMU_BUCKET = new HostBucket(2000);
-const ALPHAPOLIS_BUCKET = new HostBucket(1500);
-
 const adapters: Partial<Record<SourceSite, SourceAdapter>> = {
-  syosetu: withRateLimit(syosetuAdapter, SYOSETU_FAMILY_BUCKET),
-  nocturne: withRateLimit(nocturneAdapter, SYOSETU_FAMILY_BUCKET),
-  kakuyomu: withRateLimit(kakuyomuAdapter, KAKUYOMU_BUCKET),
-  alphapolis: withRateLimit(alphapolisAdapter, ALPHAPOLIS_BUCKET),
+  syosetu: syosetuAdapter,
+  nocturne: nocturneAdapter,
+  kakuyomu: kakuyomuAdapter,
+  alphapolis: alphapolisAdapter,
 };
 
 export function getAdapter(site: SourceSite): SourceAdapter {

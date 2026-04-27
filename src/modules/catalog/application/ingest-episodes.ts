@@ -4,10 +4,12 @@ import { novels, episodes } from "@/lib/db/schema";
 import { getAdapter } from "@/modules/source/infra/registry";
 import type { SourceSite } from "@/modules/source/domain/source-adapter";
 
-// Rate limiting is owned by the adapter registry's per-host token bucket
-// (see RateLimitedAdapter in registry.ts). The decorator serializes outbound
-// fetches across all callers (api routes + worker), so per-call setTimeout
-// is no longer required for politeness.
+// Politeness sleep between sequential ingest fetches inside a single batch
+// loop. Kept local to the worker so API routes (register, refresh-metadata,
+// ranking) can fire upstream requests without queuing behind a global
+// promise-chain bucket — that earlier shape deadlocked /ranking and
+// /reader for users while the worker was busy.
+const FETCH_DELAY_MS = 1000;
 
 /**
  * Discover episodes from the novel's TOC and insert new episode records.
@@ -267,7 +269,9 @@ export async function reingestNovelByChecksum(
       currentEpisodeId: ep.id,
     });
 
-    // Rate limit handled by adapter registry's per-host token bucket.
+    if (index < rows.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, FETCH_DELAY_MS));
+    }
   }
 
   return { unchanged, updated, failed, total };
@@ -319,7 +323,9 @@ export async function fetchPendingEpisodes(
       currentEpisodeId: ep.id,
     });
 
-    // Rate limit handled by adapter registry's per-host token bucket.
+    if (index < pending.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, FETCH_DELAY_MS));
+    }
   }
 
   return { fetched, failed, total };
