@@ -69,14 +69,44 @@ own the field and `ingest-episodes.ts` reads it directly.
 If you add an adapter with ordinal episode numbers, populate
 `sourceEpisodeId: String(episodeNumber)` in `fetchEpisodeList`.
 
-### Rate limiting at registry, not call site
+### Rate limiting at registry — reverted after a runtime deadlock
 
-The original syosetu code had `FETCH_DELAY_MS = 1000` hard-coded inside
-`ingest-episodes.ts` and a manual `setTimeout` after each fetch. That only
-throttled the batch loop — concurrent ranking requests + register requests
-hit upstreams in parallel. Reviewer fix: per-host token bucket on the
-`RateLimitedAdapter` decorator inside the registry. Decorator wraps the four
-`fetch*` methods so callers never think about delays.
+Reviewer recommendation in the original plan was a per-host token bucket on
+a `RateLimitedAdapter` decorator inside the registry. Shipped that way in
+phase 2; **removed in a hotfix**.
+
+The promise-chain implementation serialized every outbound fetch through
+a single growing chain per host. That was correct for cross-process
+politeness in isolation, but a hard deadlock between two real lanes:
+
+- Worker (`fetchPendingEpisodes` / `reingestNovelByChecksum`) iterates
+  episodes in a `for` loop, awaits each fetch, and queues the next.
+- API routes (`/ranking`, `/reader`, `/api/novels/register`,
+  `/api/translations/*`) fire one upstream fetch per request.
+
+When the worker is processing N pending episodes, every API request that
+hits the same host gets appended to the chain behind those N fetches.
+Per-fetch wait grows without bound; the 20s `AbortSignal.timeout` on each
+fetch fires; aries logs fill with `TimeoutError`. Site looks unresponsive.
+
+Hotfix:
+- Drop `withRateLimit` + `HostBucket` from the registry. `getAdapter`
+  returns the bare adapter.
+- Restore `FETCH_DELAY_MS = 1000` inline `setTimeout` sleeps in the
+  worker's batch loops (`fetchPendingEpisodes`,
+  `reingestNovelByChecksum`). Each loop runs its own ≤1 req/s pace
+  without coupling to other lanes.
+- API routes now talk to the upstream directly. Per-request fetches
+  are rare enough in practice that politeness isn't violated.
+
+If a future reviewer wants cross-lane throttling back, do **not** use a
+promise-chain bucket. Either:
+- A leaky-bucket model that fast-fails when the queue is full and lets
+  the caller back off.
+- Two separate buckets per host: a slow batch bucket (worker only) and
+  a fast interactive bucket (API routes only) with separate timestamps.
+- Redis-backed token bucket reused from `src/lib/rate-limit.ts`, which
+  is already process-shared and has bounded waits.
 
 ### Kakuyomu Apollo schema drift
 

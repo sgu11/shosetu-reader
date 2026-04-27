@@ -34,7 +34,7 @@ src/modules/source/
 │   ├── source-adapter.ts    # Interface + types (SourceSite, RankingPeriod, NovelMetadata, …)
 │   └── ncode.ts             # Syosetu ncode parsing/url helpers (kept for legacy callers)
 ├── infra/
-│   ├── registry.ts          # getAdapter(), parseInput(), HostBucket, RateLimitedAdapter
+│   ├── registry.ts          # getAdapter(), parseInput() — bare adapters; no global bucket (see 08-known-gotchas.md)
 │   ├── syosetu-family.ts    # Factory shared by syosetu + nocturne
 │   ├── syosetu-adapter.ts   # syosetuAdapter = createSyosetuFamilyAdapter({ general })
 │   ├── nocturne-adapter.ts  # nocturneAdapter = createSyosetuFamilyAdapter({ adult })

@@ -75,7 +75,7 @@ Two design notes worth flagging:
   coerce `String(entry.episodeNumber)` for syosetu, which silently broke for
   kakuyomu (opaque ids ≠ ordinals). Adapters now own the field.
 
-## Registry + rate-limit decorator
+## Registry
 
 `src/modules/source/infra/registry.ts`.
 
@@ -85,37 +85,43 @@ export function listEnabledSites(): SourceSite[]
 export function parseInput(input: string): { site: SourceSite; id: string } | null
 ```
 
-### `HostBucket`
+The registry is intentionally thin: a static `Partial<Record<SourceSite, SourceAdapter>>`
+plus the URL/id parser. Adapters are returned bare — there is no
+process-wide rate-limit decorator. Throttling lives at each call site.
 
-Per-host token bucket. One acquire per outbound fetch:
+### Why no global bucket
 
-```ts
-class HostBucket {
-  constructor(intervalMs: number)
-  acquire(): Promise<void>  // resolves when the next request can fire
-}
-```
+An earlier iteration wrapped each adapter in a `RateLimitedAdapter` decorator
+backed by a per-host promise-chain `HostBucket`. That shape serialized
+every outbound fetch through a single growing chain per host. While the
+worker was running `fetchPendingEpisodes` against a novel with N pending
+episodes, the chain held N pending acquires; any concurrent /ranking,
+/reader, or /api/* request that touched the same upstream queued behind
+the entire batch and timed out at 20s. Aries logs filled with
+`TimeoutError` and the site looked unresponsive to users.
 
-Three buckets in production:
-- `SYOSETU_FAMILY_BUCKET` (1000ms) — shared by syosetu + nocturne (both hit `api.syosetu.com`).
-- `KAKUYOMU_BUCKET` (2000ms) — kakuyomu HTML scrape is heavier than a JSON API.
-- `ALPHAPOLIS_BUCKET` (1500ms).
+The fix: the worker's batch loops keep their own inline `setTimeout`
+politeness sleeps (1 req/s), and API routes go to the upstream directly.
+Worker throttling is now a single-lane concern, not a global coupling.
 
-### `RateLimitedAdapter` decorator
+### Throttling that survives
 
-```ts
-const adapters = {
-  syosetu:    withRateLimit(syosetuAdapter, SYOSETU_FAMILY_BUCKET),
-  nocturne:   withRateLimit(nocturneAdapter, SYOSETU_FAMILY_BUCKET),
-  kakuyomu:   withRateLimit(kakuyomuAdapter, KAKUYOMU_BUCKET),
-  alphapolis: withRateLimit(alphapolisAdapter, ALPHAPOLIS_BUCKET),
-};
-```
+| Caller | Throttle |
+|---|---|
+| Worker `fetchPendingEpisodes`, `reingestNovelByChecksum` | `setTimeout(FETCH_DELAY_MS=1000)` between iterations inside the loop |
+| Worker `refreshSubscribedNovelMetadata` | `setTimeout(1000)` between iterations (already inline) |
+| `/api/novels/register` | One fetch per call; rate-limited on the **route** by `rateLimit(req, RATE_LIMIT, "register")` (5/min/IP) |
+| `/api/ranking` | One fetch per call; route-level rate limit (20/min/IP) |
+| `/api/translations/*` | Reader-page fetch; throttled by browser request batching + the existing rate limiter |
 
-The decorator wraps the four `fetch*` methods so callers never think about
-delays. This was the key reviewer fix: previously `FETCH_DELAY_MS` was
-hard-coded inside `ingest-episodes.ts`, which only throttled the batch loop
-— concurrent ranking + register requests from API routes blew the budget.
+The site-level upstream-politeness budget is therefore:
+- Worker: ≤1 req/s per active novel ingest, no upper bound on episode count
+- API: bounded by per-IP rate limits already in `rateLimit()` (Redis-backed)
+
+If a future need calls for cross-lane throttling (e.g. shared upstream
+quota), see `08-known-gotchas.md` for the design notes on what NOT to do
+(promise-chain bucket) and what would work (leaky bucket with backpressure,
+two separate buckets per host, or reusing the Redis rate limiter).
 
 ### `parseInput`
 
