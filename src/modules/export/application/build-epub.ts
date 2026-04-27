@@ -312,7 +312,13 @@ export async function buildEpub(opts: BuildEpubOptions): Promise<{
       chapters,
       includeGlossary,
       opts.lang,
-      `urn:shosetu:${novel.sourceId}:${Date.now()}`,
+      // Keep the syosetu URN scheme byte-identical for existing exports so
+      // EPUB readers don't lose progress on re-exports. Other sources may
+      // contain non-URN-safe characters (e.g. alphapolis "{author}/{novel}"),
+      // so URL-encode their ids.
+      novel.sourceSite === "syosetu"
+        ? `urn:shosetu:${novel.sourceId}:${Date.now()}`
+        : `urn:${novel.sourceSite}:${encodeURIComponent(novel.sourceId)}:${Date.now()}`,
     ),
   );
   for (const c of chapters) {
@@ -324,7 +330,7 @@ export async function buildEpub(opts: BuildEpubOptions): Promise<{
 
   const buffer = await zip.generateAsync({ type: "nodebuffer" });
   const safeTitle = (novel.titleKo ?? novel.titleJa).replace(/[^\w가-힣ぁ-ゖァ-ヶ一-龯-]+/g, "_").slice(0, 80);
-  const filename = `${safeTitle || novel.sourceId}.epub`;
+  const filename = `${safeTitle || novel.sourceId.replace(/[^\w-]+/g, "_")}.epub`;
   return {
     buffer,
     filename,
