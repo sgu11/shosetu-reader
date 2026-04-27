@@ -78,9 +78,24 @@ export function validateTranslation(input: ValidationInput): QualityWarning[] {
     }
   }
 
-  // 5. Truncation detection — output ends mid-sentence
-  const tail = input.translatedText.slice(-50);
-  const hasSentenceEnding = /[다요죠임음됨함.\!\?]/.test(tail);
+  // 5. Truncation detection — output ends mid-sentence.
+  // Strip trailing whitespace + closing quotes/brackets/parens before
+  // looking at the final character. Web-novel tails like
+  //   「……쿠우」
+  //   (계속)
+  // legitimately end on a syllable that the earlier strict last-50-chars
+  // regex treated as truncation.
+  const trimmedTail = input.translatedText
+    .replace(/[\s」』）\)\]】〕〉》​]+$/u, "");
+  // Match a deliberate ending in the LAST few characters of the cleaned
+  // tail, not anywhere in the last 50. Korean verbs end in 다/요/지/까/네/군
+  // (occasionally 자/임/음/됨/함), plus standard punctuation, ellipsis,
+  // dashes, or the conventional closing markers.
+  const lastFew = trimmedTail.slice(-3);
+  const hasSentenceEnding =
+    /[다요죠지까네군자임음됨함\.\!\?。…—–]/.test(lastFew) ||
+    /계속$/.test(trimmedTail) || // "(계속)" = "(continued)"
+    /끝$/.test(trimmedTail);
   if (!hasSentenceEnding && input.translatedText.length > 100) {
     warnings.push({
       code: "POSSIBLE_TRUNCATION",

@@ -113,6 +113,28 @@ describe("validateTranslation", () => {
     expect(warnings.some((w) => w.code === "POSSIBLE_TRUNCATION")).toBe(false);
   });
 
+  it("does not flag dialogue tail closing with 」 + (계속)", () => {
+    // Real production sample (ep 232): episode ends with
+    // dialogue lines and a "(계속)" footer. The earlier heuristic
+    // false-flagged this as truncation.
+    const warnings = validateTranslation({
+      sourceText: "「やはり人間はダメ?」".repeat(20),
+      translatedText:
+        "「역시 인간은 안 돼?」\n「……그렇지도 않지만……」\n「얼굴, 취향이야?」\n「……뭐, 그럭저럭……」\n「……쿠우」\n\n(계속)",
+      chunkCount: null,
+    });
+    expect(warnings.some((w) => w.code === "POSSIBLE_TRUNCATION")).toBe(false);
+  });
+
+  it("does not flag dialogue ending with closing 」 quote", () => {
+    const warnings = validateTranslation({
+      sourceText: "test".repeat(40),
+      translatedText: "그가 웃으며 말했다。「뭐, 어쩌다 보니까」".repeat(5),
+      chunkCount: null,
+    });
+    expect(warnings.some((w) => w.code === "POSSIBLE_TRUNCATION")).toBe(false);
+  });
+
   // 7. GLOSSARY_MISMATCH
   it("flags glossary terms missing from translation", () => {
     const warnings = validateTranslation({

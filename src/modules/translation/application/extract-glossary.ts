@@ -155,7 +155,11 @@ export async function extractGlossaryTerms(
         },
       ],
       temperature: 0.1,
-      max_tokens: 2048,
+      // 2048 tokens regularly truncated 5-entry JSON responses with
+      // detailed `notes` fields, leaving the parser with mid-string
+      // garbage. Doubling gives ample headroom; output rarely exceeds
+      // 2K tokens in practice but the cap kept biting at the edge.
+      max_tokens: 4096,
       response_format: { type: "json_object" },
     }),
   });
@@ -168,6 +172,14 @@ export async function extractGlossaryTerms(
 
   const data = await res.json();
   const content = data.choices?.[0]?.message?.content;
+  const finishReason = data.choices?.[0]?.finish_reason as string | undefined;
+  if (finishReason === "length") {
+    logger.warn("Glossary extract response truncated by max_tokens", {
+      novelId: payload.novelId,
+      episodeNumber: payload.episodeNumber,
+      outputTokens: data.usage?.completion_tokens,
+    });
+  }
   if (!content) return { imported: 0, skipped: 0 };
 
   // Log extraction cost for visibility
@@ -207,16 +219,28 @@ export async function extractGlossaryTerms(
     const parsed = JSON.parse(content);
     rawEntries = Array.isArray(parsed) ? parsed : (parsed.entries ?? parsed.terms ?? []);
   } catch {
-    // Try to extract JSON array from the response
+    // Try to extract a complete JSON array from the response. Truncated
+    // responses (finish_reason=length) leave a half-open array; bail
+    // gracefully so the rest of the translation pipeline isn't blocked.
     const match = content.match(/\[[\s\S]*\]/);
     if (!match) {
-      console.error("Failed to parse extraction response:", content.slice(0, 500));
+      logger.warn("Glossary extract response not parseable as JSON", {
+        novelId: payload.novelId,
+        episodeNumber: payload.episodeNumber,
+        finishReason,
+        preview: content.slice(0, 200),
+      });
       return { imported: 0, skipped: 0 };
     }
     try {
       rawEntries = JSON.parse(match[0]);
     } catch {
-      console.error("Failed to parse extracted JSON array:", match[0].slice(0, 500));
+      logger.warn("Glossary extract returned malformed JSON array", {
+        novelId: payload.novelId,
+        episodeNumber: payload.episodeNumber,
+        finishReason,
+        preview: match[0].slice(0, 200),
+      });
       return { imported: 0, skipped: 0 };
     }
   }
