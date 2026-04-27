@@ -6,6 +6,7 @@ import { GlossaryDrawer } from "@/components/reader/glossary-drawer";
 import { GlossaryToggle } from "@/components/reader/glossary-toggle";
 import { PacingBar } from "@/components/reader/pacing-bar";
 import { StickyToolbar } from "@/components/reader/sticky-toolbar";
+import { ToolbarOverflow } from "@/components/reader/toolbar-overflow";
 import { ProgressTracker } from "@/components/progress-tracker";
 import { ReaderSettings } from "@/components/reader-settings";
 import { TranslationToggle } from "@/components/translation-toggle";
@@ -90,19 +91,19 @@ export default async function ReaderPage({ params, searchParams }: Props) {
       </div>
 
       <StickyToolbar>
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-1.5 px-3 py-1.5 sm:flex-nowrap sm:justify-between sm:gap-2 sm:px-6 sm:py-2">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-1.5 px-3 py-1.5 sm:gap-2 sm:px-6 sm:py-2">
           {navigation.prevEpisodeId ? (
             <Link
               href={`/reader/${navigation.prevEpisodeId}`}
-              className="order-1 shrink-0 rounded-full border border-border bg-surface px-2.5 py-1 text-sm font-medium text-secondary transition-colors hover:bg-surface-strong hover:text-foreground sm:px-3 sm:py-1.5"
+              className="shrink-0 rounded-full border border-border bg-surface px-2.5 py-1 text-sm font-medium text-secondary transition-colors hover:bg-surface-strong hover:text-foreground sm:px-3 sm:py-1.5"
             >
               ←
             </Link>
           ) : (
-            <span className="invisible order-1 shrink-0 rounded-full px-2.5 py-1 text-sm font-medium sm:px-3 sm:py-1.5">←</span>
+            <span className="invisible shrink-0 rounded-full px-2.5 py-1 text-sm font-medium sm:px-3 sm:py-1.5">←</span>
           )}
 
-          <div className="order-3 flex w-full min-w-0 flex-wrap items-center justify-center gap-2 sm:order-2 sm:w-auto sm:flex-nowrap">
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
             <TranslationToggle
               episodeId={episodeId}
               initialTranslation={initialTranslation}
@@ -111,37 +112,39 @@ export default async function ReaderPage({ params, searchParams }: Props) {
               availableTranslations={availableTranslations}
               pendingTranslation={pendingTranslation}
             />
-            <ReaderSettings />
-            {hasGlossary ? <GlossaryToggle /> : null}
-            {(isComparing || compareTarget) && (
-              <Link
-                href={
-                  isComparing
-                    ? `/reader/${episodeId}`
-                    : `/reader/${episodeId}?compare=${encodeURIComponent(compareTarget!)}`
-                }
-                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                  isComparing
-                    ? "border-accent bg-accent/10 text-accent"
-                    : "border-border text-muted hover:text-foreground"
-                }`}
-                aria-label="Toggle translation comparison"
-                title={isComparing ? "Exit compare" : "Compare translations"}
-              >
-                ⇄
-              </Link>
-            )}
+            <ToolbarOverflow>
+              <ReaderSettings />
+              {hasGlossary ? <GlossaryToggle /> : null}
+              {(isComparing || compareTarget) && (
+                <Link
+                  href={
+                    isComparing
+                      ? `/reader/${episodeId}`
+                      : `/reader/${episodeId}?compare=${encodeURIComponent(compareTarget!)}`
+                  }
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    isComparing
+                      ? "border-accent bg-accent/10 text-accent"
+                      : "border-border text-muted hover:text-foreground"
+                  }`}
+                  aria-label="Toggle translation comparison"
+                  title={isComparing ? "Exit compare" : "Compare translations"}
+                >
+                  ⇄
+                </Link>
+              )}
+            </ToolbarOverflow>
           </div>
 
           {navigation.nextEpisodeId ? (
             <Link
               href={`/reader/${navigation.nextEpisodeId}`}
-              className="order-2 ml-auto shrink-0 rounded-full border border-border bg-surface px-2.5 py-1 text-sm font-medium text-secondary transition-colors hover:bg-surface-strong hover:text-foreground sm:px-3 sm:py-1.5 sm:order-3 sm:ml-0"
+              className="shrink-0 rounded-full border border-border bg-surface px-2.5 py-1 text-sm font-medium text-secondary transition-colors hover:bg-surface-strong hover:text-foreground sm:px-3 sm:py-1.5"
             >
               →
             </Link>
           ) : (
-            <span className="invisible order-2 ml-auto shrink-0 rounded-full px-2.5 py-1 text-sm font-medium sm:px-3 sm:py-1.5 sm:order-3 sm:ml-0">→</span>
+            <span className="invisible shrink-0 rounded-full px-2.5 py-1 text-sm font-medium sm:px-3 sm:py-1.5">→</span>
           )}
         </div>
       </StickyToolbar>
