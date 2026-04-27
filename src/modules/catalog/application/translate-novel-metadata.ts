@@ -6,11 +6,43 @@ import { logger } from "@/lib/logger";
 import { recordOpenRouterError, recordOpenRouterUsage } from "@/lib/ops-metrics";
 import { estimateCost } from "@/modules/translation/application/cost-estimation";
 
+// In-process semaphore. registerNovel fires translateNovelMetadata
+// fire-and-forget for every register call; without bounding, a 50-novel
+// ranking burst opens 50 simultaneous OpenRouter sockets in the Next.js
+// server process.
+const MAX_CONCURRENT = 3;
+let inFlight = 0;
+const waiters: Array<() => void> = [];
+
+async function acquire(): Promise<void> {
+  if (inFlight < MAX_CONCURRENT) {
+    inFlight += 1;
+    return;
+  }
+  await new Promise<void>((resolve) => waiters.push(resolve));
+  inFlight += 1;
+}
+
+function release(): void {
+  inFlight -= 1;
+  const next = waiters.shift();
+  if (next) next();
+}
+
 /**
  * Translate a novel's title and summary from Japanese to Korean
  * using the OpenRouter API. Updates the novel record in-place.
  */
 export async function translateNovelMetadata(novelId: string): Promise<void> {
+  await acquire();
+  try {
+    await translateNovelMetadataInner(novelId);
+  } finally {
+    release();
+  }
+}
+
+async function translateNovelMetadataInner(novelId: string): Promise<void> {
   const apiKey = env.OPENROUTER_API_KEY;
   if (!apiKey) return;
 

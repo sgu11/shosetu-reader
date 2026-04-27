@@ -1,4 +1,4 @@
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { episodes, translations, translationSettings, novelGlossaries, novelGlossaryEntries } from "@/lib/db/schema";
 import { env } from "@/lib/env";
@@ -142,6 +142,28 @@ export async function requestTranslation(
     glossaryVersion: ctx.glossaryVersion,
     sessionMode: false,
   });
+
+  // Dedup against ANY in-flight translation for this episode + model.
+  // The identity index below only catches exact (provider, model, promptVersion,
+  // checksum) matches — but a prompt-version bump or checksum change would
+  // bypass it and create a parallel translation for the same episode under
+  // the same model, doubling the OpenRouter spend.
+  const [activeAny] = await db
+    .select({ id: translations.id, status: translations.status })
+    .from(translations)
+    .where(
+      and(
+        eq(translations.episodeId, episodeId),
+        eq(translations.targetLanguage, "ko"),
+        eq(translations.modelName, provider.modelName),
+        sql`${translations.status} IN ('queued', 'processing')`,
+      ),
+    )
+    .limit(1);
+
+  if (activeAny) {
+    return { translationId: activeAny.id, status: activeAny.status };
+  }
 
   // Check for existing translation with same identity
   const [existing] = await db

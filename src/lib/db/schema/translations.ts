@@ -76,6 +76,9 @@ export const translations = pgTable(
       table.status,
       table.episodeId,
     ),
+    index("translations_episode_created_ko_idx")
+      .on(table.episodeId, table.createdAt.desc())
+      .where(sql`${table.targetLanguage} = 'ko'`),
     uniqueIndex("translations_identity_idx").on(
       table.episodeId,
       table.targetLanguage,

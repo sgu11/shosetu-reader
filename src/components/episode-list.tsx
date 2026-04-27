@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import { useTranslation } from "@/lib/i18n/client";
 import { EpisodeTranslationBadge } from "./episode-translation-badge";
 
@@ -23,11 +24,25 @@ interface Props {
   totalCount: number;
 }
 
+const PAGE_SIZE = 100;
+
 export function EpisodeList({ novelId, initialEpisodes, totalCount }: Props) {
   const { t, locale } = useTranslation();
   void novelId;
   const episodes = initialEpisodes;
   const count = totalCount;
+
+  const totalPages = Math.max(1, Math.ceil(episodes.length / PAGE_SIZE));
+  const [pageRaw, setPage] = useState(0);
+  // Clamp at render time so list shrinks (e.g. polling drops rows) don't
+  // strand the user on an empty page.
+  const page = Math.min(pageRaw, totalPages - 1);
+
+  const visible = useMemo(() => {
+    if (episodes.length <= PAGE_SIZE) return episodes;
+    const start = page * PAGE_SIZE;
+    return episodes.slice(start, start + PAGE_SIZE);
+  }, [episodes, page]);
 
   if (episodes.length === 0) {
     return (
@@ -37,14 +52,28 @@ export function EpisodeList({ novelId, initialEpisodes, totalCount }: Props) {
     );
   }
 
+  const showPagination = episodes.length > PAGE_SIZE;
+  const rangeStart = page * PAGE_SIZE + 1;
+  const rangeEnd = Math.min((page + 1) * PAGE_SIZE, episodes.length);
+
   return (
     <>
       <h2 className="text-xl font-normal">
         {t("novel.episodesHeading")}{" "}
         <span className="text-base text-muted">({count})</span>
       </h2>
+      {showPagination && (
+        <PaginationControls
+          page={page}
+          totalPages={totalPages}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          total={episodes.length}
+          onChange={setPage}
+        />
+      )}
       <div className="space-y-1">
-        {episodes.map((ep) => {
+        {visible.map((ep) => {
           const isReadable = ep.fetchStatus === "fetched";
           const isProcessing = ep.translationStatus === "processing";
 
@@ -136,6 +165,74 @@ export function EpisodeList({ novelId, initialEpisodes, totalCount }: Props) {
           );
         })}
       </div>
+      {showPagination && (
+        <PaginationControls
+          page={page}
+          totalPages={totalPages}
+          rangeStart={rangeStart}
+          rangeEnd={rangeEnd}
+          total={episodes.length}
+          onChange={setPage}
+        />
+      )}
     </>
+  );
+}
+
+function PaginationControls({
+  page,
+  totalPages,
+  rangeStart,
+  rangeEnd,
+  total,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  rangeStart: number;
+  rangeEnd: number;
+  total: number;
+  onChange: (next: number) => void;
+}) {
+  const btn =
+    "rounded-md border border-border bg-surface px-3 py-1 text-sm transition-colors hover:bg-surface-strong disabled:opacity-40 disabled:hover:bg-surface";
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
+      <span>
+        {rangeStart}–{rangeEnd} / {total}
+      </span>
+      <div className="flex items-center gap-1">
+        <button type="button" className={btn} onClick={() => onChange(0)} disabled={page === 0}>
+          ⏮
+        </button>
+        <button
+          type="button"
+          className={btn}
+          onClick={() => onChange(Math.max(0, page - 1))}
+          disabled={page === 0}
+        >
+          ←
+        </button>
+        <span className="px-2">
+          {page + 1} / {totalPages}
+        </span>
+        <button
+          type="button"
+          className={btn}
+          onClick={() => onChange(Math.min(totalPages - 1, page + 1))}
+          disabled={page >= totalPages - 1}
+        >
+          →
+        </button>
+        <button
+          type="button"
+          className={btn}
+          onClick={() => onChange(totalPages - 1)}
+          disabled={page >= totalPages - 1}
+        >
+          ⏭
+        </button>
+      </div>
+    </div>
   );
 }

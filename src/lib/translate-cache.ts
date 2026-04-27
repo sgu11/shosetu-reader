@@ -9,6 +9,11 @@ import { estimateCost } from "@/modules/translation/application/cost-estimation"
 const BATCH_SIZE = 50;
 const BATCH_CONCURRENCY = 3;
 const NUMBER_ONLY = /^\d+$/;
+// Hard ceiling on consecutive batch failures within a single translateTexts
+// run. A transient OpenRouter outage used to multiply spend by up to 4×
+// (3 retries each × 25 batches). Once we see N batches in a row return
+// the original input (= retry budget exhausted), bail and skip the rest.
+const MAX_CONSECUTIVE_BATCH_FAILURES = 3;
 
 /**
  * Cache-only lookup. Returns whatever Japanese-to-Korean translations are
@@ -72,11 +77,14 @@ export async function translateTexts(
     batches.push(uncached.slice(i, i + BATCH_SIZE));
   }
 
+  let consecutiveFailures = 0;
+
   for (let i = 0; i < batches.length; i += BATCH_CONCURRENCY) {
     const group = batches.slice(i, i + BATCH_CONCURRENCY);
     const translations = await Promise.all(group.map((b) => translateBatch(b)));
 
     const rows: { titleJa: string; titleKo: string }[] = [];
+    let groupProducedTranslation = false;
     for (let g = 0; g < group.length; g++) {
       const batch = group[g];
       const translated = translations[g];
@@ -85,12 +93,26 @@ export async function translateTexts(
         if (ko && ko !== batch[j]) {
           result.set(batch[j], ko);
           rows.push({ titleJa: batch[j], titleKo: ko });
+          groupProducedTranslation = true;
         }
       }
     }
 
     if (rows.length > 0) {
       await db.insert(titleTranslationCache).values(rows).onConflictDoNothing();
+    }
+
+    if (groupProducedTranslation) {
+      consecutiveFailures = 0;
+    } else {
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= MAX_CONSECUTIVE_BATCH_FAILURES) {
+        logger.warn("translateTexts aborting: consecutive batch failures", {
+          consecutiveFailures,
+          remainingBatches: batches.length - (i + group.length),
+        });
+        break;
+      }
     }
   }
 

@@ -11,6 +11,10 @@ import type { SourceSite } from "@/modules/source/domain/source-adapter";
 // /reader for users while the worker was busy.
 const FETCH_DELAY_MS = 1000;
 
+// Hard ceiling on a single ingest run. Caller-supplied limits past this
+// would monopolize the single-threaded worker for hours.
+const MAX_FETCH_PER_RUN = 5000;
+
 /**
  * Discover episodes from the novel's TOC and insert new episode records.
  * Does NOT fetch content — just creates pending episode rows.
@@ -294,6 +298,21 @@ export async function fetchPendingEpisodes(
 ): Promise<{ fetched: number; failed: number; total: number }> {
   const db = getDb();
 
+  // Reset rows abandoned by a crashed worker mid-fetch. Without this, rows
+  // left in `fetching` would be silently skipped by the pending filter
+  // below and require manual intervention.
+  await db
+    .update(episodes)
+    .set({ fetchStatus: "pending", updatedAt: new Date() })
+    .where(
+      and(
+        eq(episodes.novelId, novelId),
+        eq(episodes.fetchStatus, "fetching"),
+      ),
+    );
+
+  const effectiveLimit = Math.max(1, Math.min(limit, MAX_FETCH_PER_RUN));
+
   const pending = await db
     .select({ id: episodes.id })
     .from(episodes)
@@ -301,7 +320,7 @@ export async function fetchPendingEpisodes(
       and(eq(episodes.novelId, novelId), eq(episodes.fetchStatus, "pending")),
     )
     .orderBy(episodes.episodeNumber)
-    .limit(limit);
+    .limit(effectiveLimit);
 
   let fetched = 0;
   let failed = 0;

@@ -55,30 +55,34 @@ export async function getNovelLiveStatus(novelId: string) {
     getLatestNovelJob(novelId),
   ]);
 
-  const episodeItems: NovelLiveEpisode[] = [];
+  // Compute progress estimates in parallel. Earlier shape was a sequential
+  // for-await loop, which on a 1200-episode novel with many concurrent
+  // processing translations turned the 5-second poll into a multi-second
+  // request.
+  const progressEstimates = await Promise.all(
+    rows.map((row) =>
+      row.translationStatus === "processing" && row.normalizedTextJa
+        ? estimateTranslationProgress({
+            modelName: row.translationModel ?? "",
+            sourceText: row.normalizedTextJa,
+            processingStartedAt: row.processingStartedAt,
+          })
+        : Promise.resolve(null),
+    ),
+  );
 
-  for (const row of rows) {
-    const progressEstimate = row.translationStatus === "processing" && row.normalizedTextJa
-      ? await estimateTranslationProgress({
-          modelName: row.translationModel ?? "",
-          sourceText: row.normalizedTextJa,
-          processingStartedAt: row.processingStartedAt,
-        })
-      : null;
-
-    episodeItems.push({
-      id: row.id,
-      episodeNumber: row.episodeNumber,
-      titleJa: row.titleJa,
-      titleKo: null,
-      fetchStatus: row.fetchStatus,
-      hasTranslation: row.translationStatus === "available",
-      translationStatus: row.translationStatus as NovelLiveEpisode["translationStatus"],
-      translationModel: row.translationModel ?? null,
-      translationProgressPercent: progressEstimate?.progressPercent ?? null,
-      publishedAt: row.publishedAt?.toISOString() ?? null,
-    });
-  }
+  const episodeItems: NovelLiveEpisode[] = rows.map((row, i) => ({
+    id: row.id,
+    episodeNumber: row.episodeNumber,
+    titleJa: row.titleJa,
+    titleKo: null,
+    fetchStatus: row.fetchStatus,
+    hasTranslation: row.translationStatus === "available",
+    translationStatus: row.translationStatus as NovelLiveEpisode["translationStatus"],
+    translationModel: row.translationModel ?? null,
+    translationProgressPercent: progressEstimates[i]?.progressPercent ?? null,
+    publishedAt: row.publishedAt?.toISOString() ?? null,
+  }));
 
   return {
     job: job

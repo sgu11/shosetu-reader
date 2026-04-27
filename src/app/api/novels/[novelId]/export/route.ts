@@ -45,18 +45,17 @@ export async function GET(
   }
 
   try {
-    const { buffer, filename } = await buildEpub({
+    const { stream, filename } = await buildEpub({
       novelId,
       lang,
       modelName,
       from,
       to,
     });
-    return new Response(new Uint8Array(buffer), {
+    return new Response(stream, {
       headers: {
         "Content-Type": "application/epub+zip",
         "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
-        "Content-Length": String(buffer.length),
       },
     });
   } catch (err) {

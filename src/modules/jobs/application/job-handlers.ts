@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { episodes } from "@/lib/db/schema";
 import { translateTexts } from "@/lib/translate-cache";
+import { RedisJobQueue } from "@/modules/jobs/infra/redis-job-queue";
 import {
   fetchPendingEpisodes,
   reingestNovelByChecksum,
@@ -40,6 +41,10 @@ export interface MetadataRefreshPayload {
   triggeredBy: "schedule" | "manual";
 }
 
+export interface TranslateTitlesPayload {
+  novelId: string;
+}
+
 export interface GlossaryGeneratePayload {
   novelId: string;
   modelName?: string;
@@ -55,6 +60,7 @@ const jobHandlers: {
 } = {
   "catalog.ingest-all": handleIngestAll as JobHandler<unknown>,
   "catalog.metadata-refresh": handleMetadataRefresh as JobHandler<unknown>,
+  "catalog.translate-titles": handleTranslateTitles as JobHandler<unknown>,
   "glossary.generate": handleGlossaryGenerate as JobHandler<unknown>,
   "glossary.extract": handleGlossaryExtract as JobHandler<unknown>,
   "glossary.refresh": handleGlossaryRefresh as JobHandler<unknown>,
@@ -108,22 +114,18 @@ async function handleIngestAll(
     );
   }
 
-  // Batch-translate episode titles so first novel page load is instant
+  // Hand off title batch-translation to a separate job so this ingest
+  // run releases the worker promptly. Earlier shape ran 25+ OpenRouter
+  // batches inline, blocking other novels' ingests for several minutes.
   try {
-    const db = getDb();
-    const episodeRows = await db
-      .select({ titleJa: episodes.titleJa })
-      .from(episodes)
-      .where(eq(episodes.novelId, payload.novelId));
-    const titles = episodeRows
-      .map((r) => r.titleJa)
-      .filter((t): t is string => t != null && t.trim() !== "");
-    if (titles.length > 0) {
-      await translateTexts(titles);
-    }
+    const queue = new RedisJobQueue();
+    await queue.enqueue<TranslateTitlesPayload>(
+      "catalog.translate-titles",
+      { novelId: payload.novelId },
+      { entityType: "novel", entityId: payload.novelId },
+    );
   } catch (err) {
-    logger.warn("Job progress update failed", {
-      jobKind: "catalog.ingest-all",
+    logger.warn("Failed to enqueue translate-titles job", {
       novelId: payload.novelId,
       err: err instanceof Error ? err.message : String(err),
     });
@@ -133,6 +135,34 @@ async function handleIngestAll(
     stage: "completed",
     discovered: payload.discovered,
     ...result,
+  };
+}
+
+async function handleTranslateTitles(
+  payload: TranslateTitlesPayload,
+  context: JobExecutionContext<TranslateTitlesPayload>,
+) {
+  await context.updateProgress({ stage: "translating", processed: 0, total: 0 });
+
+  const db = getDb();
+  const episodeRows = await db
+    .select({ titleJa: episodes.titleJa })
+    .from(episodes)
+    .where(eq(episodes.novelId, payload.novelId));
+  const titles = episodeRows
+    .map((r) => r.titleJa)
+    .filter((t): t is string => t != null && t.trim() !== "");
+
+  if (titles.length === 0) {
+    return { stage: "completed", processed: 0, total: 0 };
+  }
+
+  await translateTexts(titles);
+
+  return {
+    stage: "completed",
+    processed: titles.length,
+    total: titles.length,
   };
 }
 
