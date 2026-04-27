@@ -11,6 +11,34 @@ const BATCH_CONCURRENCY = 3;
 const NUMBER_ONLY = /^\d+$/;
 
 /**
+ * Cache-only lookup. Returns whatever Japanese-to-Korean translations are
+ * already in the DB cache; never calls OpenRouter. Use this from server-
+ * rendered pages so a slow upstream cannot stall the response.
+ */
+export async function lookupCachedTranslations(
+  texts: string[],
+): Promise<Map<string, string>> {
+  const db = getDb();
+  const result = new Map<string, string>();
+
+  const translatable = [
+    ...new Set(texts.filter((t) => t.trim() && !NUMBER_ONLY.test(t.trim()))),
+  ];
+  if (translatable.length === 0) return result;
+
+  const cached = await db
+    .select()
+    .from(titleTranslationCache)
+    .where(inArray(titleTranslationCache.titleJa, translatable));
+
+  for (const row of cached) {
+    result.set(row.titleJa, row.titleKo);
+  }
+
+  return result;
+}
+
+/**
  * Translate Japanese texts to Korean with DB caching.
  * Skips number-only strings. Returns a map of ja → ko.
  */
@@ -75,32 +103,52 @@ async function translateBatch(texts: string[]): Promise<string[]> {
   const RETRYABLE = new Set([429, 502, 503, 504]);
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      signal: AbortSignal.timeout(30_000),
-      headers: {
-        Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://shosetu-reader.local",
-        "X-Title": "Shosetu Reader",
-      },
-      body: JSON.stringify({
-        model: resolveModel("title"),
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a Japanese-to-Korean translator. Translate the given Japanese texts naturally into Korean. Keep character names in their original form. Output ONLY the numbered list of translated texts, one per line, matching the input numbering exactly. No explanations.",
-          },
-          {
-            role: "user",
-            content: `Translate these Japanese texts to Korean:\n\n${numbered}`,
-          },
-        ],
-        temperature: 0.3,
-        max_tokens: 4096,
-      }),
-    });
+    let res: Response;
+    try {
+      res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        signal: AbortSignal.timeout(30_000),
+        headers: {
+          Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://shosetu-reader.local",
+          "X-Title": "Shosetu Reader",
+        },
+        body: JSON.stringify({
+          model: resolveModel("title"),
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a Japanese-to-Korean translator. Translate the given Japanese texts naturally into Korean. Keep character names in their original form. Output ONLY the numbered list of translated texts, one per line, matching the input numbering exactly. No explanations.",
+            },
+            {
+              role: "user",
+              content: `Translate these Japanese texts to Korean:\n\n${numbered}`,
+            },
+          ],
+          temperature: 0.3,
+          max_tokens: 4096,
+        }),
+      });
+    } catch (err) {
+      // Network errors (incl. AbortSignal.timeout) used to escape the
+      // function and abort the caller's render — getEpisodesByNovelId on
+      // a 1200+ episode page would 500 on the first OpenRouter blip.
+      // Fall through to retry / give-up so the caller gets best-effort
+      // texts back.
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn("OpenRouter batch title translation network error", {
+        message,
+        attempt,
+      });
+      if (attempt < MAX_RETRIES) {
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      return texts;
+    }
 
     if (!res.ok) {
       await recordOpenRouterError("title-translation.batch", res.status);
@@ -115,7 +163,15 @@ async function translateBatch(texts: string[]): Promise<string[]> {
       return texts;
     }
 
-    const data = await res.json();
+    let data: { choices?: Array<{ message?: { content?: string } }>; usage?: { prompt_tokens?: number; completion_tokens?: number } };
+    try {
+      data = await res.json();
+    } catch (err) {
+      logger.warn("OpenRouter batch title translation JSON parse error", {
+        message: err instanceof Error ? err.message : String(err),
+      });
+      return texts;
+    }
     const content: string = data.choices?.[0]?.message?.content ?? "";
     const inputTokens = data.usage?.prompt_tokens;
     const outputTokens = data.usage?.completion_tokens;

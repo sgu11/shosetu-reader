@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { novels, episodes, translations } from "@/lib/db/schema";
-import { translateTexts } from "@/lib/translate-cache";
+import { lookupCachedTranslations } from "@/lib/translate-cache";
 import type { NovelResponse, EpisodeListItem } from "../api/schemas";
 import { createEmptyNovelStatusOverview, getNovelStatusOverviews } from "./get-novel-status-overviews";
 
@@ -18,20 +18,23 @@ export async function getNovelById(
 
   if (!row) return null;
 
-  // Translate title and summary if not already cached in novels table
+  // Cache-only lookup for novel-level title/summary too. registerNovel
+  // already kicks off translateNovelMetadata as fire-and-forget; once that
+  // settles the columns are populated and SSR no longer needs to translate.
+  // Falling back to JP text on cache miss is much better than a 500.
   let titleKo = row.titleKo;
   let summaryKo = row.summaryKo;
 
-  const textsToTranslate: string[] = [];
-  if (!titleKo) textsToTranslate.push(row.titleJa);
-  if (!summaryKo && row.summaryJa) textsToTranslate.push(row.summaryJa);
+  const textsToLookup: string[] = [];
+  if (!titleKo) textsToLookup.push(row.titleJa);
+  if (!summaryKo && row.summaryJa) textsToLookup.push(row.summaryJa);
 
-  if (textsToTranslate.length > 0) {
-    const cache = await translateTexts(textsToTranslate);
+  if (textsToLookup.length > 0) {
+    const cache = await lookupCachedTranslations(textsToLookup);
     if (!titleKo) titleKo = cache.get(row.titleJa) ?? null;
     if (!summaryKo && row.summaryJa) summaryKo = cache.get(row.summaryJa) ?? null;
 
-    // Persist back to novels table so future loads skip the translation lookup
+    // Persist back to novels table so future loads skip the cache lookup
     const updates: Record<string, unknown> = {};
     if (titleKo && !row.titleKo) updates.titleKo = titleKo;
     if (summaryKo && !row.summaryKo) updates.summaryKo = summaryKo;
@@ -92,12 +95,15 @@ export async function getEpisodesByNovelId(
     .where(eq(episodes.novelId, novelId))
     .orderBy(episodes.episodeNumber);
 
-  // Collect non-number episode titles for translation
-  const titlesToTranslate = rows
+  // Cache-only lookup so SSR doesn't block on OpenRouter for big novels.
+  // Episode titles get translated by background jobs (or by the client-
+  // side ranking page); SSR shows whichever titles already have a cached
+  // translation and falls back to the JP title for the rest.
+  const titlesToLookup = rows
     .map((r) => r.titleJa)
     .filter((t): t is string => t != null && t.trim() !== "");
-  const titleCache = titlesToTranslate.length > 0
-    ? await translateTexts(titlesToTranslate)
+  const titleCache = titlesToLookup.length > 0
+    ? await lookupCachedTranslations(titlesToLookup)
     : new Map<string, string>();
 
   const items: EpisodeListItem[] = rows.map((row) => ({
