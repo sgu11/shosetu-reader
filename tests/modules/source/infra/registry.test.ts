@@ -14,13 +14,18 @@ describe("source registry", () => {
     expect(adapter.isAdult).toBe(true);
   });
 
+  it("returns the kakuyomu adapter for site=kakuyomu", () => {
+    const adapter = getAdapter("kakuyomu");
+    expect(adapter.site).toBe("kakuyomu");
+    expect(adapter.isAdult).toBe(false);
+  });
+
   it("throws for sites that are not yet registered", () => {
-    expect(() => getAdapter("kakuyomu")).toThrow(/not implemented/i);
     expect(() => getAdapter("alphapolis")).toThrow(/not implemented/i);
   });
 
   it("lists only enabled sites", () => {
-    expect(listEnabledSites()).toEqual(["syosetu", "nocturne"]);
+    expect(listEnabledSites()).toEqual(["syosetu", "nocturne", "kakuyomu"]);
   });
 });
 
