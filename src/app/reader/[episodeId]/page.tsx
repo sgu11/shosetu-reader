@@ -5,6 +5,7 @@ import { ComparePane } from "@/components/reader/compare-pane";
 import { GlossaryDrawer } from "@/components/reader/glossary-drawer";
 import { GlossaryToggle } from "@/components/reader/glossary-toggle";
 import { PacingBar } from "@/components/reader/pacing-bar";
+import { StickyToolbar } from "@/components/reader/sticky-toolbar";
 import { ProgressTracker } from "@/components/progress-tracker";
 import { ReaderSettings } from "@/components/reader-settings";
 import { TranslationToggle } from "@/components/translation-toggle";
@@ -88,17 +89,17 @@ export default async function ReaderPage({ params, searchParams }: Props) {
         </div>
       </div>
 
-      <nav className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-6 py-2 sm:flex-nowrap sm:justify-between">
+      <StickyToolbar>
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-1.5 px-3 py-1.5 sm:flex-nowrap sm:justify-between sm:gap-2 sm:px-6 sm:py-2">
           {navigation.prevEpisodeId ? (
             <Link
               href={`/reader/${navigation.prevEpisodeId}`}
-              className="order-1 shrink-0 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-secondary transition-colors hover:bg-surface-strong hover:text-foreground"
+              className="order-1 shrink-0 rounded-full border border-border bg-surface px-2.5 py-1 text-sm font-medium text-secondary transition-colors hover:bg-surface-strong hover:text-foreground sm:px-3 sm:py-1.5"
             >
               ←
             </Link>
           ) : (
-            <span className="invisible order-1 shrink-0 rounded-full px-3 py-1.5 text-sm font-medium">←</span>
+            <span className="invisible order-1 shrink-0 rounded-full px-2.5 py-1 text-sm font-medium sm:px-3 sm:py-1.5">←</span>
           )}
 
           <div className="order-3 flex w-full min-w-0 flex-wrap items-center justify-center gap-2 sm:order-2 sm:w-auto sm:flex-nowrap">
@@ -135,15 +136,15 @@ export default async function ReaderPage({ params, searchParams }: Props) {
           {navigation.nextEpisodeId ? (
             <Link
               href={`/reader/${navigation.nextEpisodeId}`}
-              className="order-2 ml-auto shrink-0 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-secondary transition-colors hover:bg-surface-strong hover:text-foreground sm:order-3 sm:ml-0"
+              className="order-2 ml-auto shrink-0 rounded-full border border-border bg-surface px-2.5 py-1 text-sm font-medium text-secondary transition-colors hover:bg-surface-strong hover:text-foreground sm:px-3 sm:py-1.5 sm:order-3 sm:ml-0"
             >
               →
             </Link>
           ) : (
-            <span className="invisible order-2 ml-auto shrink-0 rounded-full px-3 py-1.5 text-sm font-medium sm:order-3 sm:ml-0">→</span>
+            <span className="invisible order-2 ml-auto shrink-0 rounded-full px-2.5 py-1 text-sm font-medium sm:px-3 sm:py-1.5 sm:order-3 sm:ml-0">→</span>
           )}
         </div>
-      </nav>
+      </StickyToolbar>
 
       <div
         data-reader-grid
