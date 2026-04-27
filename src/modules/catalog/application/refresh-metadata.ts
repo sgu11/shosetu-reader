@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { novels, subscriptions } from "@/lib/db/schema";
-import { fetchNovelMetadata } from "@/modules/source/infra/syosetu-api";
+import { getAdapter } from "@/modules/source/infra/registry";
+import type { SourceSite } from "@/modules/source/domain/source-adapter";
 import { translateNovelMetadata } from "./translate-novel-metadata";
 import { logger } from "@/lib/logger";
 
@@ -27,6 +28,7 @@ export async function refreshSubscribedNovelMetadata(
   const subscribedNovels = await db
     .selectDistinct({
       id: novels.id,
+      sourceSite: novels.sourceSite,
       sourceId: novels.sourceId,
       totalEpisodes: novels.totalEpisodes,
       isCompleted: novels.isCompleted,
@@ -42,7 +44,8 @@ export async function refreshSubscribedNovelMetadata(
 
   for (const novel of subscribedNovels) {
     try {
-      const metadata = await fetchNovelMetadata(novel.sourceId);
+      const adapter = getAdapter(novel.sourceSite as SourceSite);
+      const metadata = await adapter.fetchNovelMetadata(novel.sourceId);
 
       const hasChanges =
         metadata.totalEpisodes !== novel.totalEpisodes ||

@@ -1,12 +1,13 @@
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { novels, episodes } from "@/lib/db/schema";
-import {
-  fetchEpisodeList,
-  fetchEpisodeContent,
-} from "@/modules/source/infra/episode-scraper";
+import { getAdapter } from "@/modules/source/infra/registry";
+import type { SourceSite } from "@/modules/source/domain/source-adapter";
 
-const FETCH_DELAY_MS = 1000; // Rate limit: 1 request per second
+// Rate limiting is owned by the adapter registry's per-host token bucket
+// (see RateLimitedAdapter in registry.ts). The decorator serializes outbound
+// fetches across all callers (api routes + worker), so per-call setTimeout
+// is no longer required for politeness.
 
 /**
  * Discover episodes from the novel's TOC and insert new episode records.
@@ -23,10 +24,11 @@ export async function discoverEpisodes(novelId: string): Promise<number> {
 
   if (!novel) throw new Error(`Novel not found: ${novelId}`);
 
-  const tocEntries = await fetchEpisodeList(novel.sourceId);
+  const adapter = getAdapter(novel.sourceSite as SourceSite);
+  const tocEntries = await adapter.fetchEpisodeList(novel.sourceId);
   if (tocEntries.length === 0) return 0;
 
-  const sourceIds = tocEntries.map((e) => String(e.episodeNumber));
+  const sourceIds = tocEntries.map((e) => e.sourceEpisodeId);
   const existingRows = await db
     .select({ sourceEpisodeId: episodes.sourceEpisodeId })
     .from(episodes)
@@ -39,10 +41,10 @@ export async function discoverEpisodes(novelId: string): Promise<number> {
   const existingSet = new Set(existingRows.map((r) => r.sourceEpisodeId));
 
   const toInsert = tocEntries
-    .filter((entry) => !existingSet.has(String(entry.episodeNumber)))
+    .filter((entry) => !existingSet.has(entry.sourceEpisodeId))
     .map((entry) => ({
       novelId,
-      sourceEpisodeId: String(entry.episodeNumber),
+      sourceEpisodeId: entry.sourceEpisodeId,
       episodeNumber: entry.episodeNumber,
       titleJa: entry.title,
       sourceUrl: entry.sourceUrl,
@@ -102,6 +104,8 @@ export async function fetchAndPersistEpisode(episodeId: string): Promise<void> {
 
   if (!novel) throw new Error(`Novel not found for episode: ${episodeId}`);
 
+  const adapter = getAdapter(novel.sourceSite as SourceSite);
+
   // Mark as fetching
   await db
     .update(episodes)
@@ -109,10 +113,10 @@ export async function fetchAndPersistEpisode(episodeId: string): Promise<void> {
     .where(eq(episodes.id, episodeId));
 
   try {
-    const content = await fetchEpisodeContent(
-      novel.sourceId,
-      episode.episodeNumber,
-    );
+    const content = await adapter.fetchEpisodeContent(novel.sourceId, {
+      episodeNumber: episode.episodeNumber,
+      sourceEpisodeId: episode.sourceEpisodeId,
+    });
 
     await db
       .update(episodes)
@@ -168,11 +172,13 @@ export async function fetchAndReconcileEpisode(
     .limit(1);
   if (!novel) throw new Error(`Novel not found for episode: ${episodeId}`);
 
+  const adapter = getAdapter(novel.sourceSite as SourceSite);
+
   try {
-    const content = await fetchEpisodeContent(
-      novel.sourceId,
-      episode.episodeNumber,
-    );
+    const content = await adapter.fetchEpisodeContent(novel.sourceId, {
+      episodeNumber: episode.episodeNumber,
+      sourceEpisodeId: episode.sourceEpisodeId,
+    });
 
     const now = new Date();
     if (content.checksum === episode.rawHtmlChecksum) {
@@ -261,9 +267,7 @@ export async function reingestNovelByChecksum(
       currentEpisodeId: ep.id,
     });
 
-    if (index < rows.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, FETCH_DELAY_MS));
-    }
+    // Rate limit handled by adapter registry's per-host token bucket.
   }
 
   return { unchanged, updated, failed, total };
@@ -315,10 +319,7 @@ export async function fetchPendingEpisodes(
       currentEpisodeId: ep.id,
     });
 
-    // Rate limit between fetches
-    if (index < pending.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, FETCH_DELAY_MS));
-    }
+    // Rate limit handled by adapter registry's per-host token bucket.
   }
 
   return { fetched, failed, total };

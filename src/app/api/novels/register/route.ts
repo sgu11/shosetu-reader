@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await registerNovel(parsed.data.ncode);
+    const result = await registerNovel(parsed.data.id, parsed.data.site);
     return NextResponse.json(result, { status: result.isNew ? 201 : 200 });
   } catch (err) {
     if (err instanceof SyosetuApiError) {

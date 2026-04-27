@@ -1,12 +1,12 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { novels } from "@/lib/db/schema";
-import { buildNovelUrl } from "@/modules/source/domain/ncode";
 import { logger } from "@/lib/logger";
-import {
-  fetchNovelMetadata,
-  type SyosetuNovelMetadata,
-} from "@/modules/source/infra/syosetu-api";
+import { getAdapter } from "@/modules/source/infra/registry";
+import type {
+  NovelMetadata,
+  SourceSite,
+} from "@/modules/source/domain/source-adapter";
 import { translateNovelMetadata } from "./translate-novel-metadata";
 
 export interface RegisterNovelResult {
@@ -24,26 +24,31 @@ export interface RegisterNovelResult {
 }
 
 /**
- * Register a novel by ncode: fetch metadata from Syosetu, upsert into DB.
+ * Register a novel by site + canonical id: fetch metadata via the source
+ * adapter, upsert into DB.
  */
 export async function registerNovel(
-  ncode: string,
+  id: string,
+  site: SourceSite = "syosetu",
 ): Promise<RegisterNovelResult> {
-  const metadata = await fetchNovelMetadata(ncode);
-  return upsertNovel(metadata);
+  const adapter = getAdapter(site);
+  const metadata = await adapter.fetchNovelMetadata(id);
+  return upsertNovel(site, metadata);
 }
 
 async function upsertNovel(
-  metadata: SyosetuNovelMetadata,
+  site: SourceSite,
+  metadata: NovelMetadata,
 ): Promise<RegisterNovelResult> {
   const db = getDb();
-  const sourceUrl = buildNovelUrl(metadata.ncode);
+  const adapter = getAdapter(site);
+  const sourceUrl = adapter.buildNovelUrl(metadata.id);
 
   // Check if already exists
   const existing = await db
     .select()
     .from(novels)
-    .where(eq(novels.sourceId, metadata.ncode))
+    .where(and(eq(novels.sourceSite, site), eq(novels.sourceId, metadata.id)))
     .limit(1);
 
   if (existing.length > 0) {
@@ -56,11 +61,11 @@ async function upsertNovel(
         summaryJa: metadata.summary,
         isCompleted: metadata.isCompleted,
         totalEpisodes: metadata.totalEpisodes,
-        sourceMetadataJson: metadata.raw,
+        sourceMetadataJson: metadata.raw as never,
         lastSourceSyncAt: new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(novels.sourceId, metadata.ncode))
+      .where(and(eq(novels.sourceSite, site), eq(novels.sourceId, metadata.id)))
       .returning();
 
     // Fire-and-forget: translate title/summary if not yet translated
@@ -90,14 +95,15 @@ async function upsertNovel(
   const [inserted] = await db
     .insert(novels)
     .values({
-      sourceId: metadata.ncode,
+      sourceSite: site,
+      sourceId: metadata.id,
       sourceUrl,
       titleJa: metadata.title,
       authorName: metadata.authorName,
       summaryJa: metadata.summary,
       isCompleted: metadata.isCompleted,
       totalEpisodes: metadata.totalEpisodes,
-      sourceMetadataJson: metadata.raw,
+      sourceMetadataJson: metadata.raw as never,
       lastSourceSyncAt: new Date(),
     })
     .returning();

@@ -1,11 +1,9 @@
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { novels } from "@/lib/db/schema";
-import {
-  fetchRanking,
-  type RankingPeriod,
-  type SyosetuNovelMetadata,
-} from "@/modules/source/infra/syosetu-api";
+import { getAdapter } from "@/modules/source/infra/registry";
+import type { NovelMetadata, RankingPeriod } from "@/modules/source/domain/source-adapter";
+import type { SyosetuNovelMetadata } from "@/modules/source/infra/syosetu-api";
 import { buildNovelUrl } from "@/modules/source/domain/ncode";
 
 export interface RankingItem {
@@ -28,9 +26,10 @@ export async function getRanking(
   period: RankingPeriod = "daily",
   limit: number = 20,
 ): Promise<RankingItem[]> {
-  const ranked = await fetchRanking(period, limit);
+  const adapter = getAdapter("syosetu");
+  const ranked: NovelMetadata[] = await adapter.fetchRanking(period, limit);
   const db = getDb();
-  const ncodes = [...new Set(ranked.map((item) => item.ncode))];
+  const ncodes = [...new Set(ranked.map((item) => item.id))];
 
   const existingRows = ncodes.length === 0
     ? []
@@ -46,13 +45,13 @@ export async function getRanking(
 
   return ranked.map((meta, index) => ({
     rank: index + 1,
-    ncode: meta.ncode,
+    ncode: meta.id,
     title: meta.title,
     authorName: meta.authorName,
-    totalEpisodes: meta.totalEpisodes,
-    isCompleted: meta.isCompleted,
-    sourceUrl: buildNovelUrl(meta.ncode),
-    novelId: existingByNcode.get(meta.ncode) ?? null,
+    totalEpisodes: meta.totalEpisodes ?? 0,
+    isCompleted: meta.isCompleted ?? false,
+    sourceUrl: buildNovelUrl(meta.id),
+    novelId: existingByNcode.get(meta.id) ?? null,
   }));
 }
 
