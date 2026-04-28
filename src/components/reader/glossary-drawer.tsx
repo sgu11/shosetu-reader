@@ -31,19 +31,21 @@ export async function GlossaryDrawer({ entries }: Props) {
                 key={`${entry.termJa}-${entry.category}`}
                 className="border-b border-dashed border-border pb-3 last:border-b-0 last:pb-0"
               >
-                <div className="flex items-baseline gap-2">
-                  <span className="font-serif text-base font-semibold text-foreground">
-                    {entry.termKo}
-                  </span>
-                  <span className="font-jp text-[12px] text-muted">
-                    {entry.termJa}
-                  </span>
-                  <span className="ml-auto rounded-[3px] border border-border-strong px-1.5 py-0.5 font-mono text-[9px] text-muted">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="break-keep font-serif text-base font-semibold leading-tight text-foreground">
+                      {entry.termKo}
+                    </span>
+                    <span className="break-keep font-jp text-[12px] leading-tight text-muted">
+                      {entry.termJa}
+                    </span>
+                  </div>
+                  <span className="shrink-0 rounded-[3px] border border-border-strong px-1.5 py-0.5 font-mono text-[9px] text-muted">
                     {t(locale, `glossary.${entry.category}`)}
                   </span>
                 </div>
                 {entry.notes ? (
-                  <p className="mt-1 font-serif text-[11.5px] leading-relaxed text-secondary">
+                  <p className="mt-1.5 font-serif text-[11.5px] leading-relaxed text-secondary">
                     {entry.notes}
                   </p>
                 ) : null}

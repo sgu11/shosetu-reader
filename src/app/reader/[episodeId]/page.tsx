@@ -6,7 +6,7 @@ import { GlossaryDrawer } from "@/components/reader/glossary-drawer";
 import { GlossaryToggle } from "@/components/reader/glossary-toggle";
 import { PacingBar } from "@/components/reader/pacing-bar";
 import { StickyToolbar } from "@/components/reader/sticky-toolbar";
-import { ReaderTocSidebar } from "@/components/reader/toc-sidebar";
+import { ReaderProgressBar } from "@/components/reader/progress-bar";
 import { ToolbarOverflow } from "@/components/reader/toolbar-overflow";
 import { ProgressTracker } from "@/components/progress-tracker";
 import { ReaderSettings } from "@/components/reader-settings";
@@ -75,25 +75,13 @@ export default async function ReaderPage({ params, searchParams }: Props) {
       />
       <PacingBar />
 
-      <div className="border-b border-border lg:hidden">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-2.5">
-          <Link
-            href={`/novels/${novel.id}`}
-            className="flex min-w-0 items-center gap-2 truncate text-sm text-secondary transition-colors hover:text-foreground"
-          >
-            <span aria-hidden>←</span>
-            <span className="truncate">{novel.titleKo ?? novel.titleJa}</span>
-          </Link>
-          <span className="font-mono text-[10px] tracking-wider text-muted">
-            #{episode.episodeNumber}
-            {episode.titleKo
-              ? ` — ${episode.titleKo}`
-              : episode.titleJa
-                ? ` — ${episode.titleJa}`
-                : ""}
-          </span>
-        </div>
-      </div>
+      <ReaderProgressBar
+        novelId={novel.id}
+        novelTitleJa={novel.titleJa}
+        novelTitleKo={novel.titleKo}
+        currentEpisodeNumber={episode.episodeNumber}
+        totalEpisodes={navigation.totalEpisodes}
+      />
 
       <StickyToolbar>
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-1.5 px-3 py-1.5 sm:gap-2 sm:px-6 sm:py-2">
@@ -157,20 +145,9 @@ export default async function ReaderPage({ params, searchParams }: Props) {
       <div
         data-reader-grid
         className={`mx-auto grid w-full max-w-6xl flex-1 gap-8 px-6 py-10 lg:px-12 ${
-          hasGlossary
-            ? "lg:grid-cols-[220px_minmax(0,1fr)_300px]"
-            : "lg:grid-cols-[220px_minmax(0,1fr)]"
+          hasGlossary ? "lg:grid-cols-[minmax(0,1fr)_300px]" : ""
         }`}
       >
-        <ReaderTocSidebar
-          entries={navigation.toc}
-          currentEpisodeId={episode.id}
-          totalEpisodes={navigation.totalEpisodes}
-          novelTitleJa={novel.titleJa}
-          novelTitleKo={novel.titleKo}
-          novelId={novel.id}
-          currentEpisodeNumber={episode.episodeNumber}
-        />
         <main className="reader-area mx-auto w-full">
           {payload.compareTranslation && translation && (
             <div className="mb-8">
