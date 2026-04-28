@@ -145,10 +145,12 @@ async function callOpenRouter(params: {
       temperature: 0.3,
       max_tokens: params.maxTokens,
       response_format: { type: "json_object" },
-      ...buildOpenRouterRoutingBody(
-        params.operation === "glossary.style" ? "compare" : "extraction",
-        params.modelName,
-      ),
+      // Both operations are structured-JSON single-shots over a small
+      // pinned window of episodes — extraction-class workload. Mapping
+      // glossary.style to 'compare' previously dragged it into reasoning
+      // HIGH on V4 Pro, which then spent the 2048 max_tokens budget on
+      // thinking and truncated the actual style-guide payload.
+      ...buildOpenRouterRoutingBody("extraction", params.modelName),
     }),
   });
 
@@ -160,6 +162,18 @@ async function callOpenRouter(params: {
 
   const data = await res.json();
   const content = data.choices?.[0]?.message?.content ?? "";
+  const finishReason = data.choices?.[0]?.finish_reason as string | undefined;
+
+  if (finishReason === "length") {
+    logger.warn(`${params.operation} response truncated by max_tokens`, {
+      operation: params.operation,
+      model: params.modelName,
+      maxTokens: params.maxTokens,
+      outputTokens: data.usage?.completion_tokens,
+      reasoningTokens: data.usage?.completion_tokens_details?.reasoning_tokens,
+      contentChars: content.length,
+    });
+  }
 
   let costUsd: number | null = null;
   const inputTokens = data.usage?.prompt_tokens;
@@ -312,7 +326,10 @@ export async function generateGlossary(
     apiKey,
     systemPrompt: STYLE_GUIDE_SYSTEM_PROMPT,
     userContent: `Analyze these ${styleRows.length} early episodes and produce the style guide:\n\n${styleExcerpts}`,
-    maxTokens: 2048,
+    // 2048 was tight even at reasoning OFF; with any reasoning overhead
+    // the structured-JSON tail truncated. 4096 leaves headroom while
+    // still well under the workload-profile cap.
+    maxTokens: 4096,
   });
 
   // Mine JP candidates across ALL sampled episodes (stratified, untruncated)
