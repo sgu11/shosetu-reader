@@ -24,6 +24,11 @@ export const dictionaries = {
     "status.fetchedCount": "{count} fetched",
     "status.queuedCount": "{count} queued",
     "status.failedCount": "{count} failed",
+    "status.stop": "Stop",
+    "status.confirmStop": "Stop all queued background work for this novel? Currently running steps will finish but no further work will be enqueued.",
+    "status.stoppedSummary": "Cancelled — {jobs} job(s), {translations} translation(s).",
+    "status.stopFailed": "Could not cancel. Try again.",
+    "status.activeBackground": "Background work in progress",
     "status.activeTranslations": "{count} translating",
 
     // Home
@@ -422,6 +427,11 @@ export const dictionaries = {
     "status.fetchedCount": "{count}화 수집",
     "status.queuedCount": "{count}화 대기열 추가",
     "status.failedCount": "{count}화 실패",
+    "status.stop": "중지",
+    "status.confirmStop": "이 소설의 모든 대기열 작업을 중지할까요? 진행 중인 단계는 완료되지만 새 작업은 추가되지 않습니다.",
+    "status.stoppedSummary": "중지됨 — 작업 {jobs}건, 번역 {translations}건 취소.",
+    "status.stopFailed": "중지에 실패했습니다. 다시 시도해 주세요.",
+    "status.activeBackground": "백그라운드 작업 진행 중",
     "status.activeTranslations": "{count}화 번역 중",
 
     // Home
