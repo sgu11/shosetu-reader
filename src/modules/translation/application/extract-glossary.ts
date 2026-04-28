@@ -6,7 +6,12 @@ import {
   novelGlossaryEntries,
   translationSessions,
 } from "@/lib/db/schema";
-import { buildOpenRouterRoutingBody, env, resolveModel } from "@/lib/env";
+import {
+  buildOpenRouterRoutingBody,
+  env,
+  resolveModel,
+  resolveWorkloadProfile,
+} from "@/lib/env";
 import { logger } from "@/lib/logger";
 import {
   extractUsageTelemetry,
@@ -204,11 +209,10 @@ export async function extractGlossaryTerms(
         },
       ],
       temperature: 0.1,
-      // 2048 tokens regularly truncated 5-entry JSON responses with
-      // detailed `notes` fields, leaving the parser with mid-string
-      // garbage. Doubling gives ample headroom; output rarely exceeds
-      // 2K tokens in practice but the cap kept biting at the edge.
-      max_tokens: 4096,
+      // Default 4096 tokens — overridable via OPENROUTER_MAX_TOKENS_EXTRACTION.
+      // Lower values regularly truncated 5-entry JSON responses with detailed
+      // notes; the parser then bailed on mid-string garbage.
+      max_tokens: resolveWorkloadProfile("extraction").maxTokens,
       response_format: { type: "json_object" },
       ...buildOpenRouterRoutingBody("extraction", resolveModel("extraction")),
     }),

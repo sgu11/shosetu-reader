@@ -8,7 +8,12 @@ import {
   novelGlossaries,
   novelGlossaryEntries,
 } from "@/lib/db/schema";
-import { buildOpenRouterRoutingBody, env, resolveModel } from "@/lib/env";
+import {
+  buildOpenRouterRoutingBody,
+  env,
+  resolveModel,
+  resolveWorkloadProfile,
+} from "@/lib/env";
 import { logger } from "@/lib/logger";
 import {
   extractUsageTelemetry,
@@ -548,7 +553,7 @@ Output ONLY the summary text, no headers or labels.`;
           },
         ],
         temperature: 0.2,
-        max_tokens: 1024,
+        max_tokens: resolveWorkloadProfile("summary").maxTokens,
         ...buildOpenRouterRoutingBody("summary", summaryModel),
       }),
     });

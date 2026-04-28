@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+const reasoningEffortSchema = z
+  .enum(["off", "low", "high", "xhigh"])
+  .optional();
+
 const serverEnvSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -7,11 +11,39 @@ const serverEnvSchema = z.object({
   APP_URL: z.url().default("http://localhost:3000"),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   REDIS_URL: z.string().optional().default(""),
+
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_DEFAULT_MODEL: z.string().optional().default("deepseek/deepseek-v4-flash"),
+
+  // Per-workload model overrides — fall back to OPENROUTER_DEFAULT_MODEL.
+  OPENROUTER_TRANSLATE_MODEL: z.string().optional(),
   OPENROUTER_SUMMARY_MODEL: z.string().optional(),
   OPENROUTER_EXTRACTION_MODEL: z.string().optional(),
   OPENROUTER_TITLE_MODEL: z.string().optional(),
+  OPENROUTER_COMPARE_MODEL: z.string().optional(),
+  OPENROUTER_BOOTSTRAP_MODEL: z.string().optional(),
+
+  // Per-workload reasoning effort overrides — fall back to WORKLOAD_PROFILE
+  // defaults below. Accept off|low|high|xhigh.
+  OPENROUTER_REASONING_TRANSLATE: reasoningEffortSchema,
+  OPENROUTER_REASONING_SUMMARY: reasoningEffortSchema,
+  OPENROUTER_REASONING_EXTRACTION: reasoningEffortSchema,
+  OPENROUTER_REASONING_TITLE: reasoningEffortSchema,
+  OPENROUTER_REASONING_COMPARE: reasoningEffortSchema,
+  OPENROUTER_REASONING_BOOTSTRAP: reasoningEffortSchema,
+
+  // Per-workload max-tokens overrides — same fallback pattern.
+  OPENROUTER_MAX_TOKENS_TRANSLATE: z.coerce.number().int().positive().optional(),
+  OPENROUTER_MAX_TOKENS_SUMMARY: z.coerce.number().int().positive().optional(),
+  OPENROUTER_MAX_TOKENS_EXTRACTION: z.coerce.number().int().positive().optional(),
+  OPENROUTER_MAX_TOKENS_TITLE: z.coerce.number().int().positive().optional(),
+  OPENROUTER_MAX_TOKENS_COMPARE: z.coerce.number().int().positive().optional(),
+  OPENROUTER_MAX_TOKENS_BOOTSTRAP: z.coerce.number().int().positive().optional(),
+
+  // Provider routing override. Comma-separated list, e.g. "DeepSeek".
+  // Empty string disables the auto-pin for deepseek/* models.
+  OPENROUTER_PROVIDER_PIN: z.string().optional(),
+
   GLOSSARY_MAX_PROMPT_ENTRIES: z.coerce
     .number()
     .int()
@@ -37,11 +69,32 @@ const parsedEnv = serverEnvSchema.safeParse({
   APP_URL: process.env.APP_URL,
   DATABASE_URL: process.env.DATABASE_URL,
   REDIS_URL: process.env.REDIS_URL,
+
   OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
   OPENROUTER_DEFAULT_MODEL: process.env.OPENROUTER_DEFAULT_MODEL,
+  OPENROUTER_TRANSLATE_MODEL: process.env.OPENROUTER_TRANSLATE_MODEL,
   OPENROUTER_SUMMARY_MODEL: process.env.OPENROUTER_SUMMARY_MODEL,
   OPENROUTER_EXTRACTION_MODEL: process.env.OPENROUTER_EXTRACTION_MODEL,
   OPENROUTER_TITLE_MODEL: process.env.OPENROUTER_TITLE_MODEL,
+  OPENROUTER_COMPARE_MODEL: process.env.OPENROUTER_COMPARE_MODEL,
+  OPENROUTER_BOOTSTRAP_MODEL: process.env.OPENROUTER_BOOTSTRAP_MODEL,
+
+  OPENROUTER_REASONING_TRANSLATE: process.env.OPENROUTER_REASONING_TRANSLATE,
+  OPENROUTER_REASONING_SUMMARY: process.env.OPENROUTER_REASONING_SUMMARY,
+  OPENROUTER_REASONING_EXTRACTION: process.env.OPENROUTER_REASONING_EXTRACTION,
+  OPENROUTER_REASONING_TITLE: process.env.OPENROUTER_REASONING_TITLE,
+  OPENROUTER_REASONING_COMPARE: process.env.OPENROUTER_REASONING_COMPARE,
+  OPENROUTER_REASONING_BOOTSTRAP: process.env.OPENROUTER_REASONING_BOOTSTRAP,
+
+  OPENROUTER_MAX_TOKENS_TRANSLATE: process.env.OPENROUTER_MAX_TOKENS_TRANSLATE,
+  OPENROUTER_MAX_TOKENS_SUMMARY: process.env.OPENROUTER_MAX_TOKENS_SUMMARY,
+  OPENROUTER_MAX_TOKENS_EXTRACTION: process.env.OPENROUTER_MAX_TOKENS_EXTRACTION,
+  OPENROUTER_MAX_TOKENS_TITLE: process.env.OPENROUTER_MAX_TOKENS_TITLE,
+  OPENROUTER_MAX_TOKENS_COMPARE: process.env.OPENROUTER_MAX_TOKENS_COMPARE,
+  OPENROUTER_MAX_TOKENS_BOOTSTRAP: process.env.OPENROUTER_MAX_TOKENS_BOOTSTRAP,
+
+  OPENROUTER_PROVIDER_PIN: process.env.OPENROUTER_PROVIDER_PIN,
+
   GLOSSARY_MAX_PROMPT_ENTRIES: process.env.GLOSSARY_MAX_PROMPT_ENTRIES,
   ADMIN_API_KEY: process.env.ADMIN_API_KEY,
   TRANSLATION_COST_BUDGET_USD: process.env.TRANSLATION_COST_BUDGET_USD,
@@ -70,22 +123,26 @@ export type ModelWorkload =
 
 export type ReasoningEffort = "off" | "low" | "high" | "xhigh";
 
-interface WorkloadProfile {
-  /** Reasoning depth — applied to DeepSeek V4 / OpenRouter normalized 'reasoning'. */
+export interface WorkloadProfile {
+  modelName: string;
   reasoning: ReasoningEffort;
-  /** Soft cap; per-call sites may override. */
   maxTokens: number;
 }
 
+type WorkloadKey = Exclude<ModelWorkload, "default">;
+
 /**
- * Per-workload reasoning + max_tokens defaults.
+ * Per-workload defaults applied when no env override is set.
  *
  * Output cost dominates routine translation. Body translation runs with
  * reasoning OFF so the model emits target text only. Glossary, bootstrap,
- * and comparison workloads are quality-sensitive single-shots — reasoning HIGH
- * pays for itself.
+ * and comparison workloads are quality-sensitive single-shots — reasoning
+ * HIGH pays for itself.
  */
-const WORKLOAD_PROFILE: Record<Exclude<ModelWorkload, "default">, WorkloadProfile> = {
+const WORKLOAD_DEFAULTS: Record<
+  WorkloadKey,
+  { reasoning: ReasoningEffort; maxTokens: number }
+> = {
   translate:  { reasoning: "off",  maxTokens: 4096 },
   title:      { reasoning: "off",  maxTokens: 1024 },
   summary:    { reasoning: "off",  maxTokens: 2048 },
@@ -94,41 +151,79 @@ const WORKLOAD_PROFILE: Record<Exclude<ModelWorkload, "default">, WorkloadProfil
   bootstrap:  { reasoning: "high", maxTokens: 8192 },
 };
 
+const ENV_MODEL_KEY: Record<WorkloadKey, keyof Env> = {
+  translate:  "OPENROUTER_TRANSLATE_MODEL",
+  summary:    "OPENROUTER_SUMMARY_MODEL",
+  extraction: "OPENROUTER_EXTRACTION_MODEL",
+  title:      "OPENROUTER_TITLE_MODEL",
+  compare:    "OPENROUTER_COMPARE_MODEL",
+  bootstrap:  "OPENROUTER_BOOTSTRAP_MODEL",
+};
+
+const ENV_REASONING_KEY: Record<WorkloadKey, keyof Env> = {
+  translate:  "OPENROUTER_REASONING_TRANSLATE",
+  summary:    "OPENROUTER_REASONING_SUMMARY",
+  extraction: "OPENROUTER_REASONING_EXTRACTION",
+  title:      "OPENROUTER_REASONING_TITLE",
+  compare:    "OPENROUTER_REASONING_COMPARE",
+  bootstrap:  "OPENROUTER_REASONING_BOOTSTRAP",
+};
+
+const ENV_MAX_TOKENS_KEY: Record<WorkloadKey, keyof Env> = {
+  translate:  "OPENROUTER_MAX_TOKENS_TRANSLATE",
+  summary:    "OPENROUTER_MAX_TOKENS_SUMMARY",
+  extraction: "OPENROUTER_MAX_TOKENS_EXTRACTION",
+  title:      "OPENROUTER_MAX_TOKENS_TITLE",
+  compare:    "OPENROUTER_MAX_TOKENS_COMPARE",
+  bootstrap:  "OPENROUTER_MAX_TOKENS_BOOTSTRAP",
+};
+
+function workloadKey(workload: ModelWorkload): WorkloadKey {
+  return workload === "default" ? "translate" : workload;
+}
+
 /**
  * Resolve the OpenRouter model for a specific workload.
- * Falls back to OPENROUTER_DEFAULT_MODEL if no workload-specific override is set.
+ * Falls back to OPENROUTER_DEFAULT_MODEL when the workload-specific override
+ * is absent.
  */
 export function resolveModel(workload: ModelWorkload = "default"): string {
-  switch (workload) {
-    case "summary":
-      return env.OPENROUTER_SUMMARY_MODEL || env.OPENROUTER_DEFAULT_MODEL;
-    case "extraction":
-    case "bootstrap":
-      return env.OPENROUTER_EXTRACTION_MODEL || env.OPENROUTER_DEFAULT_MODEL;
-    case "title":
-      return env.OPENROUTER_TITLE_MODEL || env.OPENROUTER_DEFAULT_MODEL;
-    case "translate":
-    case "compare":
-    case "default":
-      return env.OPENROUTER_DEFAULT_MODEL;
-  }
+  const key = workloadKey(workload);
+  const override = env[ENV_MODEL_KEY[key]] as string | undefined;
+  return override || env.OPENROUTER_DEFAULT_MODEL;
 }
 
-export function resolveWorkloadProfile(
-  workload: ModelWorkload,
-): WorkloadProfile {
-  if (workload === "default") return WORKLOAD_PROFILE.translate;
-  return WORKLOAD_PROFILE[workload];
+export function resolveWorkloadProfile(workload: ModelWorkload): WorkloadProfile {
+  const key = workloadKey(workload);
+  const defaults = WORKLOAD_DEFAULTS[key];
+  const reasoningOverride = env[ENV_REASONING_KEY[key]] as
+    | ReasoningEffort
+    | undefined;
+  const maxTokensOverride = env[ENV_MAX_TOKENS_KEY[key]] as number | undefined;
+  return {
+    modelName: resolveModel(workload),
+    reasoning: reasoningOverride ?? defaults.reasoning,
+    maxTokens: maxTokensOverride ?? defaults.maxTokens,
+  };
 }
 
 /**
- * Provider routing hint for OpenRouter requests. Pinning DeepSeek-family
- * models to the `DeepSeek` provider keeps requests on the same KV-cache
- * domain so prefix-stable prompts hit DeepSeek's automatic context cache
- * (50× cheaper input). Without pinning, OpenRouter may route to a fallback
- * host that doesn't share the cache.
+ * Provider routing hint for OpenRouter requests. By default deepseek/*
+ * requests pin to provider:{ only:["DeepSeek"] } so OpenRouter doesn't route
+ * to a fallback host outside DeepSeek's KV-cache domain (≈50× cheaper hits).
+ *
+ * OPENROUTER_PROVIDER_PIN — comma-separated provider list — overrides this.
+ * Set to an empty string to disable auto-pinning.
  */
 export function providerHintFor(modelName: string): { only: string[] } | undefined {
+  const override = env.OPENROUTER_PROVIDER_PIN;
+  if (override !== undefined) {
+    const list = override
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    return list.length > 0 ? { only: list } : undefined;
+  }
   if (modelName.startsWith("deepseek/")) {
     return { only: ["DeepSeek"] };
   }

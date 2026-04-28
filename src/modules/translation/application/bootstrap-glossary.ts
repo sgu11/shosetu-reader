@@ -1,7 +1,12 @@
 import { eq, and, asc } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
 import { episodes, novelGlossaryEntries } from "@/lib/db/schema";
-import { buildOpenRouterRoutingBody, env, resolveModel } from "@/lib/env";
+import {
+  buildOpenRouterRoutingBody,
+  env,
+  resolveModel,
+  resolveWorkloadProfile,
+} from "@/lib/env";
 import { logger } from "@/lib/logger";
 import {
   extractUsageTelemetry,
@@ -167,7 +172,7 @@ async function callOpenRouter(params: {
         { role: "user", content: params.userContent },
       ],
       temperature: 0.2,
-      max_tokens: 8192,
+      max_tokens: resolveWorkloadProfile("bootstrap").maxTokens,
       response_format: { type: "json_object" },
       ...buildOpenRouterRoutingBody("bootstrap", params.modelName),
     }),
