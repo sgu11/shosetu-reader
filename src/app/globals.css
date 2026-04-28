@@ -42,6 +42,20 @@
   --status-queued: #c08a3e;
   --status-failed: #b14a3a;
 
+  /* Source palette */
+  --src-syosetu:        #6a7c5a;
+  --src-syosetu-tint:   #e3e9d6;
+  --src-syosetu-ink:    #44513a;
+  --src-nocturne:       #a05a6e;
+  --src-nocturne-tint:  #ecd9de;
+  --src-nocturne-ink:   #6e3445;
+  --src-kakuyomu:       #5b7186;
+  --src-kakuyomu-tint:  #d9e1ea;
+  --src-kakuyomu-ink:   #34465a;
+  --src-alphapolis:     #b08348;
+  --src-alphapolis-tint:#ecdcc1;
+  --src-alphapolis-ink: #74521e;
+
   /* Reader defaults (overridden by ReaderSettings) */
   --reader-font-size: 16px;
   --reader-line-height: 1.85;

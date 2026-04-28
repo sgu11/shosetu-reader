@@ -3,8 +3,8 @@ interface Props {
   kr?: string | null;
   width?: number;
   height?: number;
-  variant?: "paper" | "night";
   ncode?: string | null;
+  rank?: number;
   className?: string;
 }
 
@@ -14,78 +14,80 @@ function hashTitle(input: string): number {
   return Math.abs(h);
 }
 
+function firstCjkGlyph(s: string | null | undefined): string {
+  if (!s) return "";
+  const m = s.match(/[぀-ヿ一-鿿]/);
+  return m ? m[0] : "";
+}
+
+// Typographic identity block. No book-cover gradient, no fake spine —
+// hairline rule on the leading edge, single CJK glyph in the corner,
+// optional rank numeral. Theme-aware via CSS tokens.
 export function NovelCover({
   jp,
   kr,
   width = 92,
   height = 132,
-  variant = "paper",
   ncode,
+  rank,
   className = "",
 }: Props) {
   const seed = jp || kr || "?";
   const hash = hashTitle(seed);
-  const hue = hash % 360;
-
-  const palette =
-    variant === "paper"
-      ? {
-          bg: `oklch(0.93 0.04 ${hue})`,
-          ink: `oklch(0.28 0.04 ${(hue + 30) % 360})`,
-          rule: `oklch(0.55 0.06 ${hue})`,
-          sub: `oklch(0.45 0.04 ${hue})`,
-          shadow:
-            "0 1px 0 rgba(0,0,0,.06), 0 8px 18px -10px rgba(0,0,0,.25)",
-        }
-      : {
-          bg: `oklch(0.18 0.03 ${hue})`,
-          ink: `oklch(0.92 0.04 ${(hue + 30) % 360})`,
-          rule: `oklch(0.65 0.08 ${hue})`,
-          sub: `oklch(0.7 0.04 ${hue})`,
-          shadow:
-            "0 1px 0 rgba(255,255,255,.04), 0 8px 18px -10px rgba(0,0,0,.6)",
-        };
-
-  const heroJp = (jp || "").replace(/[【】[\]『』「」]/g, "").slice(0, 8);
+  const glyph = firstCjkGlyph(jp) || firstCjkGlyph(kr) || "無";
   const ncodeShort = ncode ?? `n${(hash % 90000) + 10000}`;
-  const fontPx = Math.max(11, Math.min(width / 7, 16));
+  const rankLabel = rank != null ? String(rank).padStart(2, "0") : "";
+  const isMicro = width < 60;
 
   return (
     <div
-      className={`relative shrink-0 overflow-hidden rounded-[3px] ${className}`}
+      className={`relative shrink-0 overflow-hidden ${className}`}
       style={{
         width,
         height,
-        background: palette.bg,
-        color: palette.ink,
-        boxShadow: palette.shadow,
-        fontFamily: "var(--font-jp)",
+        borderLeft: "1px solid var(--foreground)",
+        paddingLeft: isMicro ? 6 : 8,
+        paddingRight: isMicro ? 0 : 4,
+        paddingTop: 0,
+        paddingBottom: 0,
+        color: "var(--muted)",
       }}
     >
-      <div
-        className="absolute inset-y-1.5 left-1.5 w-px opacity-40"
-        style={{ background: palette.rule }}
-      />
-      <div
-        className="absolute inset-y-1.5 right-1.5 w-px opacity-40"
-        style={{ background: palette.rule }}
-      />
-      <div
-        className="absolute inset-3.5 font-semibold leading-tight"
+      <span
+        aria-hidden
+        className="absolute right-0 top-0 font-jp leading-none"
         style={{
-          writingMode: "vertical-rl",
-          fontSize: fontPx,
-          letterSpacing: "0.02em",
+          fontSize: Math.max(11, Math.min(width / 3.2, 22)),
+          color: "var(--secondary)",
+          letterSpacing: 0,
         }}
       >
-        {heroJp || "無題"}
-      </div>
-      <div
-        className="absolute bottom-2 left-2 font-mono text-[8px] tracking-wider"
-        style={{ color: palette.sub }}
-      >
-        {ncodeShort}
-      </div>
+        {glyph}
+      </span>
+      {rankLabel ? (
+        <span
+          className="absolute bottom-0 left-2 font-mono leading-none num-vert"
+          style={{
+            fontSize: isMicro ? 11 : 12,
+            color: "var(--muted)",
+            letterSpacing: "0.04em",
+          }}
+        >
+          {rankLabel}
+        </span>
+      ) : (
+        <span
+          className="absolute bottom-1 left-2 font-mono leading-none"
+          style={{
+            fontSize: isMicro ? 8 : 9,
+            color: "var(--muted)",
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+          }}
+        >
+          {ncodeShort}
+        </span>
+      )}
     </div>
   );
 }

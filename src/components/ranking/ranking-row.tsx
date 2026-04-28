@@ -29,27 +29,47 @@ export function RankingRow({ item, titleKo, onRegister, registering }: Props) {
   const router = useRouter();
   const { t } = useTranslation();
   const krTitle = titleKo ?? item.title;
+  const isTopThree = item.rank <= 3;
 
   return (
     <div className="grid grid-cols-[40px_50px_1fr_auto_auto] items-center gap-4 border-b border-border py-3.5">
-      <span className="font-serif text-2xl font-normal italic text-secondary">
-        {item.rank}
+      <span
+        className={`text-right num-vert text-[18px] leading-none ${
+          isTopThree ? "font-semibold text-foreground" : "font-medium text-secondary"
+        }`}
+      >
+        {String(item.rank).padStart(2, "0")}
       </span>
-      <NovelCover jp={item.title} kr={titleKo ?? null} width={38} height={54} />
+      <NovelCover jp={item.title} kr={titleKo ?? null} width={38} height={54} rank={item.rank} />
       <div className="min-w-0">
         <div className="flex items-center gap-1.5">
           <SourcePill site={item.site} />
-          <div className="truncate font-serif text-base font-medium leading-tight text-foreground">
-            {krTitle}
-          </div>
         </div>
-        <div className="truncate font-jp text-[11.5px] text-muted">
-          {titleKo ? `${item.title} · ` : ""}
+        <div className="mt-1 flex flex-col gap-[2px] min-w-0">
+          <span className="truncate text-[14px] font-medium leading-tight tracking-tight text-foreground">
+            {krTitle}
+          </span>
+          {titleKo ? (
+            <span className="truncate font-jp text-[11px] leading-tight text-muted">
+              {item.title}
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-1 truncate font-mono text-[10px] uppercase tracking-wider text-muted">
           {item.authorName}
+          {item.isCompleted != null ? (
+            <>
+              <span className="mx-1.5 text-border-strong">/</span>
+              <span>{item.isCompleted ? t("ranking.completed") : t("ranking.ongoing")}</span>
+            </>
+          ) : null}
         </div>
       </div>
       <span className="font-mono text-[11px] text-secondary">
-        {item.totalEpisodes ?? "—"} {t("ranking.eps")}
+        <strong className="font-sans text-[12px] font-semibold text-foreground">
+          {item.totalEpisodes ?? "—"}
+        </strong>{" "}
+        {t("ranking.eps")}
       </span>
       {item.novelId ? (
         <button

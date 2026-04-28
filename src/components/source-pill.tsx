@@ -1,10 +1,47 @@
 import type { SourceSite } from "@/modules/source/domain/source-adapter";
 
-const LABELS: Record<SourceSite, { short: string; full: string; color: string }> = {
-  syosetu: { short: "なろう", full: "Syosetu", color: "border-emerald-700/40 text-emerald-700 dark:text-emerald-400" },
-  nocturne: { short: "ノクタ", full: "Nocturne", color: "border-rose-700/40 text-rose-700 dark:text-rose-400" },
-  kakuyomu: { short: "カクヨム", full: "Kakuyomu", color: "border-sky-700/40 text-sky-700 dark:text-sky-400" },
-  alphapolis: { short: "α", full: "AlphaPolis", color: "border-amber-700/40 text-amber-700 dark:text-amber-400" },
+interface SiteMeta {
+  short: string;
+  full: string;
+  mark: string;
+  bg: string;
+  ink: string;
+  markBg: string;
+}
+
+const META: Record<SourceSite, SiteMeta> = {
+  syosetu: {
+    short: "なろう",
+    full: "Syosetu",
+    mark: "な",
+    bg: "var(--src-syosetu-tint)",
+    ink: "var(--src-syosetu-ink)",
+    markBg: "var(--src-syosetu)",
+  },
+  nocturne: {
+    short: "ノクタ",
+    full: "Nocturne",
+    mark: "ノ",
+    bg: "var(--src-nocturne-tint)",
+    ink: "var(--src-nocturne-ink)",
+    markBg: "var(--src-nocturne)",
+  },
+  kakuyomu: {
+    short: "カクヨム",
+    full: "Kakuyomu",
+    mark: "カ",
+    bg: "var(--src-kakuyomu-tint)",
+    ink: "var(--src-kakuyomu-ink)",
+    markBg: "var(--src-kakuyomu)",
+  },
+  alphapolis: {
+    short: "α",
+    full: "AlphaPolis",
+    mark: "α",
+    bg: "var(--src-alphapolis-tint)",
+    ink: "var(--src-alphapolis-ink)",
+    markBg: "var(--src-alphapolis)",
+  },
 };
 
 interface Props {
@@ -14,14 +51,22 @@ interface Props {
 }
 
 export function SourcePill({ site, variant = "short", className }: Props) {
-  const label = LABELS[site];
-  if (!label) return null;
+  const m = META[site];
+  if (!m) return null;
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-1.5 py-0.5 font-mono text-[10px] tracking-wider ${label.color} ${className ?? ""}`}
-      title={label.full}
+      title={m.full}
+      className={`inline-flex items-center gap-1.5 rounded-[4px] py-[3px] pl-1.5 pr-2 text-[10.5px] font-semibold leading-[1.3] tracking-wide ${className ?? ""}`}
+      style={{ background: m.bg, color: m.ink }}
     >
-      {variant === "full" ? label.full : label.short}
+      <span
+        aria-hidden
+        className="grid h-3.5 w-3.5 place-items-center rounded-[3px] font-jp text-[10px] font-bold leading-none text-white"
+        style={{ background: m.markBg, letterSpacing: 0 }}
+      >
+        {m.mark}
+      </span>
+      <span>{variant === "full" ? m.full : m.short}</span>
     </span>
   );
 }
