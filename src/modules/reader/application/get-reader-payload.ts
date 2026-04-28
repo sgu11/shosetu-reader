@@ -54,6 +54,24 @@ export async function getReaderPayload(
     .orderBy(episodes.episodeNumber)
     .limit(1);
 
+  // TOC window: ±10 episodes around the current one.
+  const TOC_RADIUS = 10;
+  const tocRows = await db
+    .select({
+      id: episodes.id,
+      episodeNumber: episodes.episodeNumber,
+      titleJa: episodes.titleJa,
+    })
+    .from(episodes)
+    .where(
+      and(
+        eq(episodes.novelId, episode.novelId),
+        gt(episodes.episodeNumber, episode.episodeNumber - TOC_RADIUS - 1),
+        lt(episodes.episodeNumber, episode.episodeNumber + TOC_RADIUS + 1),
+      ),
+    )
+    .orderBy(asc(episodes.episodeNumber));
+
   // Get all Korean translations for this episode
   const allTranslations = await db
     .select()
@@ -90,12 +108,21 @@ export async function getReaderPayload(
 
   const configuredModel = settings?.modelName ?? env.OPENROUTER_DEFAULT_MODEL;
 
-  // Translate episode title if it's not just a number
-  let titleKo: string | null = null;
-  if (episode.titleJa) {
-    const cache = await translateTexts([episode.titleJa]);
-    titleKo = cache.get(episode.titleJa) ?? null;
-  }
+  // Translate episode title and TOC entries via shared cache. Both
+  // translatable inputs deduped into one call.
+  const titleSourcesForTranslation = Array.from(
+    new Set(
+      [
+        episode.titleJa ?? null,
+        ...tocRows.map((r) => r.titleJa),
+      ].filter((s): s is string => typeof s === "string" && s.trim().length > 0),
+    ),
+  );
+  const titleCache =
+    titleSourcesForTranslation.length > 0
+      ? await translateTexts(titleSourcesForTranslation)
+      : new Map<string, string>();
+  const titleKo = episode.titleJa ? titleCache.get(episode.titleJa) ?? null : null;
 
   const [progressRow] = await db
     .select({
@@ -155,6 +182,7 @@ export async function getReaderPayload(
     novel: {
       id: novel.id,
       titleJa: novel.titleJa,
+      titleKo: novel.titleKo ?? null,
       titleNormalized: novel.titleNormalized,
       sourceId: novel.sourceId,
     },
@@ -214,6 +242,13 @@ export async function getReaderPayload(
     navigation: {
       prevEpisodeId: prevEpisode?.id ?? null,
       nextEpisodeId: nextEpisode?.id ?? null,
+      totalEpisodes: novel.totalEpisodes ?? null,
+      toc: tocRows.map((r) => ({
+        id: r.id,
+        episodeNumber: r.episodeNumber,
+        titleJa: r.titleJa,
+        titleKo: r.titleJa ? titleCache.get(r.titleJa) ?? null : null,
+      })),
     },
     progress,
     glossary: glossaryEntries.map((entry) => ({

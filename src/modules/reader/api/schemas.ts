@@ -7,6 +7,7 @@ export const readerPayloadSchema = z.object({
   novel: z.object({
     id: z.string().uuid(),
     titleJa: z.string(),
+    titleKo: z.string().nullable(),
     titleNormalized: z.string().nullable(),
     sourceId: z.string(),
   }),
@@ -52,6 +53,15 @@ export const readerPayloadSchema = z.object({
   navigation: z.object({
     prevEpisodeId: z.string().uuid().nullable(),
     nextEpisodeId: z.string().uuid().nullable(),
+    totalEpisodes: z.number().int().nullable(),
+    toc: z.array(
+      z.object({
+        id: z.string().uuid(),
+        episodeNumber: z.number().int(),
+        titleJa: z.string().nullable(),
+        titleKo: z.string().nullable(),
+      }),
+    ),
   }),
   progress: z
     .object({

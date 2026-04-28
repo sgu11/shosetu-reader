@@ -7,6 +7,7 @@ describe("readerPayloadSchema", () => {
       novel: {
         id: "550e8400-e29b-41d4-a716-446655440000",
         titleJa: "テスト小説",
+        titleKo: "테스트 소설",
         titleNormalized: null,
         sourceId: "n1234ab",
       },
@@ -54,6 +55,15 @@ describe("readerPayloadSchema", () => {
       navigation: {
         prevEpisodeId: null,
         nextEpisodeId: "550e8400-e29b-41d4-a716-446655440003",
+        totalEpisodes: 50,
+        toc: [
+          {
+            id: "550e8400-e29b-41d4-a716-446655440001",
+            episodeNumber: 12,
+            titleJa: "第12話",
+            titleKo: "12화",
+          },
+        ],
       },
       progress: {
         currentLanguage: "ko",
