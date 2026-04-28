@@ -105,6 +105,8 @@ export const dictionaries = {
     "library.statusPending": "Pending",
     "library.statusFailed": "Retry",
     "library.newBadge": "+NEW",
+    "library.sync": "Sync",
+    "library.continue": "Continue",
 
     // Novel detail
     "novel.backToLibrary": "Library",
@@ -501,6 +503,8 @@ export const dictionaries = {
     "library.statusPending": "번역 대기",
     "library.statusFailed": "재시도",
     "library.newBadge": "+NEW",
+    "library.sync": "동기화",
+    "library.continue": "이어 읽기",
 
     // Novel detail
     "novel.backToLibrary": "서재",
