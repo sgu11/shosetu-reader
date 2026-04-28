@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Newsreader, JetBrains_Mono, Noto_Serif_JP } from "next/font/google";
 import { cookies } from "next/headers";
+import { BrandDot } from "@/components/brand-dot";
 import { Masthead } from "@/components/masthead";
 import { LocaleProvider } from "@/components/locale-provider";
 import { RegisterSW } from "@/components/register-sw";
@@ -81,6 +82,7 @@ export default async function RootLayout({
           <OfflineBadge />
           <Masthead />
           {children}
+          <BrandDot />
         </LocaleProvider>
       </body>
     </html>
