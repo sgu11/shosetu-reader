@@ -78,9 +78,10 @@ export function TranslationToggle({
   pendingTranslation: initialPendingTranslation,
 }: Props) {
   const { t, locale } = useTranslation();
-  const [language, setLanguage] = useState<"ja" | "ko">(
+  const [mode, setMode] = useState<"ja" | "ko" | "both">(
     initialLanguage === "ko" && initialTranslation?.status === "available" ? "ko" : "ja",
   );
+  const language: "ja" | "ko" = mode === "ja" ? "ja" : "ko";
   const [translation, setTranslation] = useState<TranslationState>(
     initialTranslation ?? { status: "not_requested", translatedText: null, translatedPreface: null, translatedAfterword: null, modelName: null, errorMessage: null },
   );
@@ -157,7 +158,7 @@ export function TranslationToggle({
         clearInterval(interval);
         if (status === "available" && autoSwitchOnComplete) {
           setAutoSwitchOnComplete(false);
-          setLanguage("ko");
+          setMode("ko");
           setRequesting(false);
         } else if (status !== "available") {
           setAutoSwitchOnComplete(false);
@@ -207,7 +208,7 @@ export function TranslationToggle({
         if (data.status === "available") {
           await pollStatus();
           setAutoSwitchOnComplete(false);
-          setLanguage("ko");
+          setMode("ko");
           setRequesting(false);
         }
       } else {
@@ -225,9 +226,9 @@ export function TranslationToggle({
     }
   }
 
-  function handleToggle(lang: "ja" | "ko") {
-    if (lang === "ko" && !hasTranslation) return;
-    setLanguage(lang);
+  function handleToggle(next: "ja" | "ko" | "both") {
+    if ((next === "ko" || next === "both") && !hasTranslation) return;
+    setMode(next);
   }
 
   // Switch to a specific model's translation
@@ -253,7 +254,7 @@ export function TranslationToggle({
         modelName: record.modelName,
         errorMessage: null,
       });
-      setLanguage("ko");
+      setMode("ko");
       return;
     }
 
@@ -283,11 +284,13 @@ export function TranslationToggle({
     setFeedback({ tone: "info", message: t("translation.discardSuccess") });
     const status = await pollStatus();
     if (status !== "available") {
-      setLanguage("ja");
+      setMode("ja");
     }
   }
 
-  // Show/hide the translated vs original text via DOM visibility
+  // Notify ProgressTracker of effective scroll-anchor language (KO when
+  // available, otherwise JA — "both" anchors on KO since it's the primary
+  // reading language and matches the .para-pair top line).
   useEffect(() => {
     window.dispatchEvent(
       new CustomEvent("reader-language-change", {
@@ -299,15 +302,25 @@ export function TranslationToggle({
   useEffect(() => {
     const readerEl = document.querySelector("[data-reader-text]") as HTMLElement | null;
     const originalEl = document.querySelector("[data-original-text]") as HTMLElement | null;
+    const bilingualEl = document.querySelector("[data-bilingual-text]") as HTMLElement | null;
 
     if (!readerEl || !originalEl) return;
 
-    if (language === "ko" && hasTranslation && translation.translatedText) {
-      while (readerEl.firstChild) {
-        readerEl.removeChild(readerEl.firstChild);
-      }
+    const hideAll = () => {
+      readerEl.classList.add("hidden");
+      originalEl.classList.add("hidden");
+      bilingualEl?.classList.add("hidden");
+    };
 
-      // Render translated preface with divider
+    if (mode === "ja" || !hasTranslation || !translation.translatedText) {
+      hideAll();
+      originalEl.classList.remove("hidden");
+      return;
+    }
+
+    if (mode === "ko") {
+      while (readerEl.firstChild) readerEl.removeChild(readerEl.firstChild);
+
       if (translation.translatedPreface) {
         const prefaceDiv = document.createElement("div");
         prefaceDiv.dataset.section = "preface";
@@ -324,19 +337,15 @@ export function TranslationToggle({
         readerEl.appendChild(hr);
       }
 
-      // Render translated body
       const paragraphs = translation.translatedText.split("\n");
       for (const [index, line] of paragraphs.entries()) {
         const p = document.createElement("p");
-        if (line.trim() === "") {
-          p.className = "h-6";
-        }
+        if (line.trim() === "") p.className = "h-6";
         p.dataset.readerParagraph = `p-${index}`;
         p.textContent = line;
         readerEl.appendChild(p);
       }
 
-      // Render translated afterword with divider
       if (translation.translatedAfterword) {
         const hr = document.createElement("hr");
         hr.className = "my-8 border-border/50";
@@ -353,13 +362,63 @@ export function TranslationToggle({
         readerEl.appendChild(afterwordDiv);
       }
 
-      originalEl.classList.add("hidden");
+      hideAll();
       readerEl.classList.remove("hidden");
-    } else {
-      readerEl.classList.add("hidden");
-      originalEl.classList.remove("hidden");
+      return;
     }
-  }, [language, hasTranslation, translation.translatedText, translation.translatedPreface, translation.translatedAfterword]);
+
+    // mode === "both" — pair KO over JA per source paragraph.
+    if (!bilingualEl) {
+      hideAll();
+      readerEl.classList.remove("hidden");
+      return;
+    }
+
+    while (bilingualEl.firstChild) bilingualEl.removeChild(bilingualEl.firstChild);
+
+    const sourceParagraphs = Array.from(
+      originalEl.querySelectorAll<HTMLElement>("[data-reader-paragraph]"),
+    ).map((el) => ({ idx: el.dataset.readerParagraph ?? "", text: el.textContent ?? "" }));
+
+    const koLines = translation.translatedText.split("\n");
+    let koIdx = 0;
+    for (const src of sourceParagraphs) {
+      const isBlank = src.text.trim() === "";
+      if (isBlank) {
+        const spacer = document.createElement("div");
+        spacer.className = "h-4";
+        bilingualEl.appendChild(spacer);
+        continue;
+      }
+      const pair = document.createElement("div");
+      pair.className = "para-pair";
+      pair.dataset.readerParagraph = src.idx;
+
+      const koLine = (koLines[koIdx] ?? "").trim();
+      koIdx += 1;
+      if (koLine.length > 0) {
+        const ko = document.createElement("p");
+        ko.className = "para-ko";
+        ko.textContent = koLine;
+        pair.appendChild(ko);
+      }
+      const ja = document.createElement("p");
+      ja.className = "para-ja";
+      ja.textContent = src.text;
+      pair.appendChild(ja);
+
+      bilingualEl.appendChild(pair);
+    }
+
+    hideAll();
+    bilingualEl.classList.remove("hidden");
+  }, [
+    mode,
+    hasTranslation,
+    translation.translatedText,
+    translation.translatedPreface,
+    translation.translatedAfterword,
+  ]);
 
   // Models that differ from current — for re-translate suggestions
   const otherModels = available.filter((a) => a.modelName !== displayModel);
@@ -372,7 +431,7 @@ export function TranslationToggle({
             type="button"
             onClick={() => handleToggle("ja")}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              language === "ja"
+              mode === "ja"
                 ? "bg-surface-strong text-foreground"
                 : "text-muted hover:text-foreground"
             }`}
@@ -384,7 +443,7 @@ export function TranslationToggle({
             onClick={() => handleToggle("ko")}
             disabled={!hasTranslation}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              language === "ko"
+              mode === "ko"
                 ? "bg-surface-strong text-foreground"
                 : hasTranslation
                   ? "text-muted hover:text-foreground"
@@ -392,6 +451,21 @@ export function TranslationToggle({
             }`}
           >
             KO
+          </button>
+          <button
+            type="button"
+            onClick={() => handleToggle("both")}
+            disabled={!hasTranslation}
+            title={t("translation.bilingual")}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              mode === "both"
+                ? "bg-surface-strong text-foreground"
+                : hasTranslation
+                  ? "text-muted hover:text-foreground"
+                  : "cursor-not-allowed text-muted/30"
+            }`}
+          >
+            KO·JA
           </button>
         </div>
 

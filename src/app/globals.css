@@ -234,6 +234,37 @@ a {
   max-width: var(--reader-content-width);
 }
 
+/* Bilingual paragraph pair — KO sans primary over JA jp-serif secondary
+   with hairline left rule on the JA line. Used by reader's KO·JA mode. */
+.para-pair {
+  margin-bottom: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.para-pair .para-ko {
+  font-family: "Pretendard JP Variable", "Pretendard JP", system-ui, sans-serif;
+  font-size: 15.5px;
+  line-height: 1.85;
+  color: var(--foreground);
+  font-weight: 400;
+  letter-spacing: -0.005em;
+  text-indent: 1em;
+  margin: 0;
+}
+.para-pair .para-ja {
+  font-family: var(--font-jp), "Noto Serif JP", serif;
+  font-size: 12.5px;
+  line-height: 1.75;
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+  text-indent: 1em;
+  margin: 0;
+}
+
 /* Mono uppercase technical labels */
 .code-label {
   font-family: var(--font-mono), monospace;

@@ -227,6 +227,10 @@ export default async function ReaderPage({ params, searchParams }: Props) {
                 data-reader-text
                 className="reader-text hidden space-y-1 text-secondary"
               />
+              <div
+                data-bilingual-text
+                className="reader-text hidden text-secondary"
+              />
             </>
           ) : (
             <div className="surface-card rounded-xl p-8 text-center text-sm text-muted">

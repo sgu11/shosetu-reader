@@ -172,6 +172,7 @@ export const dictionaries = {
     // Translation toggle
     "translation.translate": "Translate",
     "translation.translating": "Translating...",
+    "translation.bilingual": "Show Korean and Japanese paragraphs side by side",
     "translation.failedRetry": "Failed — retry",
     "translation.rateLimited": "Rate limited — try another model",
     "translation.retranslate": "Re-translate",
@@ -557,6 +558,7 @@ export const dictionaries = {
     // Translation toggle
     "translation.translate": "번역",
     "translation.translating": "번역 중...",
+    "translation.bilingual": "한국어와 일본어 문단을 나란히 표시",
     "translation.failedRetry": "실패 — 재시도",
     "translation.rateLimited": "요청 제한 — 다른 모델로 시도",
     "translation.retranslate": "재번역",
